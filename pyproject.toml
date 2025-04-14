@@ -7,10 +7,16 @@ name = "adaptive-retrieval"
 description = "Researching adaptive retrieval"
 requires-python = ">=3.10"
 dependencies = [
+    "autorag>=0.3.13",
+    "click>=8.1.8",
+    "numpy==1.26.4",
     "pre-commit>=4.2.0",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
     "ruff>=0.11.4",
     "setuptools>=78.1.0",
     "setuptools-scm>=8.2.0",
+    "torch>=2.6.0",
     "tqdm>=4.67.1",
 ]
 dynamic = ["version"]

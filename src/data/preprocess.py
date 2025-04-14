@@ -1,6 +1,6 @@
 # Preprocess all datasets at once
 # Allganize RAG evaluation - Already preprocessed by AutoRAG team
-# PublicHealthQA
+# https://huggingface.co/datasets/Shitao/MLDR - MLDR
 # Mr.Tydi
 # Ko-StrategyQA
 
@@ -69,7 +69,7 @@ def preprocess_ko_strategyqa():
 @click.option("--save_dir", type=click.Path(file_okay=False, dir_okay=True))
 @click.option(
 	"--dataset_name",
-	type=click.Choice(["ko-strategyqa", "mr-tydi", "public_health_qa"]),
+	type=click.Choice(["ko-strategyqa", "mr-tydi", "mldr"]),
 	required=True,
 )
 def main(save_dir: str, dataset_name: str):

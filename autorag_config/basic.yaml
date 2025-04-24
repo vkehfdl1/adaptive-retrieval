@@ -6,12 +6,13 @@ vectordb:
     embedding_model:
       - type: huggingface
         model_name: nlpai-lab/KURE-v1
+    collection_name: kure
 node_lines:
 - node_line_name: retrieve_node_line
   nodes:
     - node_type: retrieval
       strategy:
-        metrics: [ retrieval_f1, retrieval_recall, retrieval_precision
+        metrics: [ retrieval_f1, retrieval_recall, retrieval_precision,
                    retrieval_ndcg, retrieval_map, retrieval_mrr ]
         strategy: normalize_mean
       top_k: [5, 20, 50]

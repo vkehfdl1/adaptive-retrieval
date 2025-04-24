@@ -7,8 +7,10 @@ name = "adaptive-retrieval"
 description = "Researching adaptive retrieval"
 requires-python = ">=3.10"
 dependencies = [
-    "autorag>=0.3.13",
+    "chromadb==0.5.15",
+    "autorag[gpu]>=0.3.13",
     "click>=8.1.8",
+    "kiwipiepy>=0.20.4",
     "numpy==1.26.4",
     "pre-commit>=4.2.0",
     "pytest>=8.3.5",

@@ -1,0 +1,2 @@
+node_line_name,node_type,best_module_filename,best_module_name,best_module_params,best_execution_time
+retrieve_node_line,retrieval,19.parquet,HybridCC,"{'top_k': 5, 'normalize_method': 'dbsf', 'weight': 0.39, 'target_modules': ('VectorDB', 'BM25'), 'target_module_params': ({'top_k': 20, 'vectordb': 'kure'}, {'top_k': 50, 'bm25_tokenizer': 'ko_kiwi'})}",1.0485559179071795

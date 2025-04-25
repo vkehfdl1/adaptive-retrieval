@@ -24,6 +24,6 @@ node_lines:
         - module_type: hybrid_rrf
           weight_range: (4,80)
         - module_type: hybrid_cc
-          normalize_method: [ mm, tmm, z, dbsf ]
+          normalize_method: mm
           weight_range: (0.0, 1.0)
           test_weight_size: 101

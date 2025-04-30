@@ -66,81 +66,110 @@ def preprocess_ko_strategyqa():
 	return corpus, qa_train, qa_dev
 
 
-def preprocess_mldr():
-	corpus = load_dataset("Shitao/MLDR", "corpus-ko", split="corpus").to_pandas()
-	# Preprocess Corpus
-	corpus.reset_index(drop=True, inplace=True)
-	corpus.rename(
-		columns={
-			"docid": "doc_id",
-			"text": "contents",
-		},
+def add_to_corpus(corpus_df: pd.DataFrame, qa_df: pd.DataFrame) -> pd.DataFrame:
+	qa_df["positive_doc_ids"] = qa_df["positive_passages"].apply(
+		lambda x: [elem["docid"] for elem in x]
+	)
+	qa_df["positive_doc_contents"] = qa_df["positive_passages"].apply(
+		lambda x: [elem["text"] for elem in x]
+	)
+	qa_df_exploded = qa_df.explode("positive_doc_ids", ignore_index=True).explode(
+		"positive_doc_contents", ignore_index=True
+	)
+
+	qa_df_filtered = qa_df_exploded[
+		~qa_df_exploded["positive_doc_ids"].isin(corpus_df["doc_id"])
+	]
+	qa_df_filtered.rename(
+		columns={"positive_doc_ids": "doc_id", "positive_doc_contents": "contents"},
 		inplace=True,
 	)
-	corpus["metadata"] = corpus["doc_id"].apply(
+	qa_df_filtered["metadata"] = qa_df_filtered["doc_id"].apply(
 		lambda x: {
 			"last_modified_datetime": datetime.now(),
 			"prev_id": None,
 			"next_id": None,
 		}
 	)
+	corpus_df = pd.concat(
+		[corpus_df, qa_df_filtered[["doc_id", "contents", "metadata"]]]
+	)
+	return corpus_df
+
+
+def preprocess_qa_mldr_mr_tydi(df: pd.DataFrame):
+	df.reset_index(drop=True, inplace=True)
+
+	df.rename(columns={"query_id": "qid"}, inplace=True)
+	df["retrieval_gt"] = df["positive_passages"].apply(
+		lambda x: [[elem["docid"]] for elem in x]
+	)
+	df.drop(columns=["positive_passages", "negative_passages"], inplace=True)
+	df["generation_gt"] = df["qid"].apply(lambda x: [""])
+
+	return df[["qid", "query", "retrieval_gt", "generation_gt"]]
+
+
+def preprocess_corpus_mldr_mr_tydi(df: pd.DataFrame):
+	# Preprocess Corpus
+	df.reset_index(drop=True, inplace=True)
+	df.rename(
+		columns={
+			"docid": "doc_id",
+			"text": "contents",
+		},
+		inplace=True,
+	)
+	df["metadata"] = df["doc_id"].apply(
+		lambda x: {
+			"last_modified_datetime": datetime.now(),
+			"prev_id": None,
+			"next_id": None,
+		}
+	)
+	return df[["doc_id", "contents", "metadata"]]
+
+
+def preprocess_mldr():
+	corpus = load_dataset("Shitao/MLDR", "corpus-ko", split="corpus").to_pandas()
+	corpus = preprocess_corpus_mldr_mr_tydi(corpus)
 
 	train_qa = load_dataset("Shitao/MLDR", "ko", split="train").to_pandas()
 	dev_qa = load_dataset("Shitao/MLDR", "ko", split="dev").to_pandas()
 	test_qa = load_dataset("Shitao/MLDR", "ko", split="test").to_pandas()
 
 	# Need to add positive samples (or negative samples) to the corpus if there is no id.
-	def add_to_corpus(corpus_df: pd.DataFrame, qa_df: pd.DataFrame) -> pd.DataFrame:
-		qa_df["positive_doc_ids"] = qa_df["positive_passages"].apply(
-			lambda x: [elem["docid"] for elem in x]
-		)
-		qa_df["positive_doc_contents"] = qa_df["positive_passages"].apply(
-			lambda x: [elem["text"] for elem in x]
-		)
-		qa_df_exploded = qa_df.explode("positive_doc_ids", ignore_index=True).explode(
-			"positive_doc_contents", ignore_index=True
-		)
+	corpus = add_to_corpus(corpus, train_qa)
+	corpus = add_to_corpus(corpus, dev_qa)
+	corpus = add_to_corpus(corpus, test_qa)
 
-		qa_df_filtered = qa_df_exploded[
-			~qa_df_exploded["positive_doc_ids"].isin(corpus_df["doc_id"])
-		]
-		qa_df_filtered.rename(
-			columns={"positive_doc_ids": "doc_id", "positive_doc_contents": "contents"},
-			inplace=True,
-		)
-		qa_df_filtered["metadata"] = qa_df_filtered["doc_id"].apply(
-			lambda x: {
-				"last_modified_datetime": datetime.now(),
-				"prev_id": None,
-				"next_id": None,
-			}
-		)
-		corpus_df = pd.concat(
-			[corpus_df, qa_df_filtered[["doc_id", "contents", "metadata"]]]
-		)
-		return corpus_df
+	return (
+		corpus,
+		preprocess_qa_mldr_mr_tydi(train_qa),
+		preprocess_qa_mldr_mr_tydi(dev_qa),
+		preprocess_qa_mldr_mr_tydi(test_qa),
+	)
+
+
+def preprocess_mr_tydi():
+	corpus = load_dataset(
+		"castorini/mr-tydi-corpus", "korean", split="train"
+	).to_pandas()
+	corpus = preprocess_corpus_mldr_mr_tydi(corpus)
+
+	train_qa = load_dataset("castorini/mr-tydi", "korean", split="train").to_pandas()
+	dev_qa = load_dataset("castorini/mr-tydi", "korean", split="dev").to_pandas()
+	test_qa = load_dataset("castorini/mr-tydi", "korean", split="test").to_pandas()
 
 	corpus = add_to_corpus(corpus, train_qa)
 	corpus = add_to_corpus(corpus, dev_qa)
 	corpus = add_to_corpus(corpus, test_qa)
 
-	def preprocess_qa(df: pd.DataFrame):
-		df.reset_index(drop=True, inplace=True)
-
-		df.rename(columns={"query_id": "qid"}, inplace=True)
-		df["retrieval_gt"] = df["positive_passages"].apply(
-			lambda x: [[elem["docid"]] for elem in x]
-		)
-		df.drop(columns=["positive_passages", "negative_passages"], inplace=True)
-		df["generation_gt"] = df["qid"].apply(lambda x: [""])
-
-		return df[["qid", "query", "retrieval_gt", "generation_gt"]]
-
 	return (
 		corpus,
-		preprocess_qa(train_qa),
-		preprocess_qa(dev_qa),
-		preprocess_qa(test_qa),
+		preprocess_qa_mldr_mr_tydi(train_qa),
+		preprocess_qa_mldr_mr_tydi(dev_qa),
+		preprocess_qa_mldr_mr_tydi(test_qa),
 	)
 
 
@@ -166,6 +195,12 @@ def main(save_dir: str, dataset_name: str):
 		qa_train.to_parquet(os.path.join(save_dir, "qa_train.parquet"), index=False)
 		qa_dev.to_parquet(os.path.join(save_dir, "qa_dev.parquet"), index=False)
 		qa_test.to_parquet(os.path.join(save_dir, "qa_test.parquet"), index=False)
+	elif dataset_name == "mr-tydi":
+		corpus, qa_train, qa_dev, qa_test = preprocess_mr_tydi()
+		corpus.to_parquet(os.path.join(save_dir, "corpus.parquet"), index=False)
+		qa_train.to_parquet(os.path.join(save_dir, "qa_train.parquet"), index=False)
+		qa_dev.to_parquet(os.path.join(save_dir, "qa_dev.parquet"), index=False)
+		qa_test.to_parquet(os.path.join(save_dir, "qa_test.parquet"))
 
 
 if __name__ == "__main__":

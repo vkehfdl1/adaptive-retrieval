@@ -161,7 +161,11 @@ def main(save_dir: str, dataset_name: str):
 		qa_train.to_parquet(os.path.join(save_dir, "qa_train.parquet"), index=False)
 		qa_dev.to_parquet(os.path.join(save_dir, "qa_dev.parquet"), index=False)
 	elif dataset_name == "mldr":
-		corpus = preprocess_mldr()
+		corpus, qa_train, qa_dev, qa_test = preprocess_mldr()
+		corpus.to_parquet(os.path.join(save_dir, "corpus.parquet"), index=False)
+		qa_train.to_parquet(os.path.join(save_dir, "qa_train.parquet"), index=False)
+		qa_dev.to_parquet(os.path.join(save_dir, "qa_dev.parquet"), index=False)
+		qa_test.to_parquet(os.path.join(save_dir, "qa_test.parquet"), index=False)
 
 
 if __name__ == "__main__":

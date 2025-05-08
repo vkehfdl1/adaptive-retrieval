@@ -36,6 +36,7 @@ dependencies = [
     "setuptools-scm>=8.2.0",
     "torch>=2.6.0",
     "tqdm>=4.67.1",
+    "pytorch-lightning>=2.5.1.post0",
 ]
 dynamic = ["version"]
 

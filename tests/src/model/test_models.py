@@ -38,3 +38,18 @@ def test_training_module_retrieve():
 		gt_list = list(itertools.chain.from_iterable(gt_list))
 		assert len(set(semantic_ids[idx]) & set(gt_list)) > 0
 		assert len(set(lexical_ids[idx]) & set(gt_list)) > 0
+
+
+def test_training_module_forward():
+	training_module = MfarTrainingModule(str(project_dir))
+	sample_queries = [
+		"최강 삼성 히어로 누구 김영웅!",
+		"중대 기계 재학생 누구 노동건!",
+		"동굴형 동굴형! 두산의! 동굴형!",
+	]
+	result = training_module(sample_queries)
+	assert "ids" in result.keys()
+	assert "scores" in result.keys()
+	assert len(result["ids"]) == len(sample_queries) == len(result["scores"])
+	assert len(result["ids"][0]) == 20
+	assert len(result["scores"][0]) == 20

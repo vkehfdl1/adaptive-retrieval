@@ -1,9 +1,10 @@
 import itertools
-from typing import List
+from typing import List, Optional
 
 import pytorch_lightning as pl
 import torch
 from autorag.nodes.retrieval import VectorDB, BM25
+from autorag.nodes.retrieval.hybrid_cc import fuse_per_query
 
 from src.model.models import LinearWeights
 
@@ -42,19 +43,41 @@ class MfarTrainingModule(pl.LightningModule):
 		# Inference
 		with torch.no_grad():
 			embedding_list = (
-				self.vectordb_retrieval.embedding_model.get_text_embeddings(x)
+				self.vectordb_retrieval.embedding_model._get_text_embeddings(x)
 			)
-			_: torch.Tensor = self.layer(embedding_list)
+			predicted_weight: torch.Tensor = self.layer(torch.Tensor(embedding_list))
 
-		# Execute Hybrid CC
+			# Execute Hybrid CC
+			semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
+				x, retrieval_gt=None
+			)
+			result_ids, result_scores = [], []
+			for idx, weight in enumerate(predicted_weight.tolist()):
+				result_id_list, result_score_list = fuse_per_query(
+					semantic_ids[idx],
+					lexical_ids[idx],
+					semantic_scores[idx],
+					lexical_scores[idx],
+					top_k=self.top_k,
+					weight=weight,
+					normalize_method="tmm",
+					semantic_theoretical_min_value=-1.0,
+					lexical_theoretical_min_value=0.0,
+				)
+				result_ids.append(result_id_list)
+				result_scores.append(result_score_list)
+
+			return {
+				"ids": result_ids,
+				"scores": result_scores,
+			}
 
 	def training_step(self, batch, batch_idx):
 		# queries = batch["queries"]
 		pass
 
-	def retrieve(self, queries: List[str], retrieval_gt: List[List]):
-		retrieval_gt = [list(itertools.chain.from_iterable(x)) for x in retrieval_gt]
-
+	def retrieve(self, queries: List[str], retrieval_gt: Optional[List[List]] = None):
+		"""The result can be `unsorted`."""
 		# Several input batch
 		input_queries = list(map(lambda x: [x], queries))
 		semantic_ids, semantic_scores = self.vectordb_retrieval._pure(
@@ -89,27 +112,33 @@ class MfarTrainingModule(pl.LightningModule):
 		assert len(output_lexical_ids) == len(output_lexical_scores)
 		assert len(output_semantic_ids) == len(queries)
 
-		# Add Retrieval gt when there is no positive sample
-		for idx in range(len(output_semantic_ids)):
-			if len(set(retrieval_gt[idx]) & set(output_semantic_scores[idx])) < 1:
-				positive_id = retrieval_gt[idx][0]
-				positive_id_list, positive_score_list = self.vectordb_retrieval._pure(
-					[input_queries[idx]], self.top_k, ids=[[positive_id]]
-				)
-				output_semantic_ids[idx].append(positive_id_list[0][0])
-				output_semantic_scores[idx].append(positive_score_list[0][0])
+		if retrieval_gt is not None:
+			retrieval_gt = [
+				list(itertools.chain.from_iterable(x)) for x in retrieval_gt
+			]
+			# Add Retrieval gt when there is no positive sample
+			for idx in range(len(output_semantic_ids)):
+				if len(set(retrieval_gt[idx]) & set(output_semantic_scores[idx])) < 1:
+					positive_id = retrieval_gt[idx][0]
+					positive_id_list, positive_score_list = (
+						self.vectordb_retrieval._pure(
+							[input_queries[idx]], self.top_k, ids=[[positive_id]]
+						)
+					)
+					output_semantic_ids[idx].append(positive_id_list[0][0])
+					output_semantic_scores[idx].append(positive_score_list[0][0])
 
-		for idx in range(len(output_lexical_ids)):
-			if len(set(retrieval_gt[idx]) & set(output_lexical_scores[idx])) < 1:
-				positive_id = retrieval_gt[idx][0]
-				positive_id_list, positive_score_list = self.bm25_retrieval._pure(
-					[input_queries[idx]], self.top_k, ids=[[positive_id]]
-				)
-				output_lexical_ids[idx].append(positive_id_list[0][0])
-				output_lexical_scores[idx].append(positive_score_list[0][0])
+			for idx in range(len(output_lexical_ids)):
+				if len(set(retrieval_gt[idx]) & set(output_lexical_scores[idx])) < 1:
+					positive_id = retrieval_gt[idx][0]
+					positive_id_list, positive_score_list = self.bm25_retrieval._pure(
+						[input_queries[idx]], self.top_k, ids=[[positive_id]]
+					)
+					output_lexical_ids[idx].append(positive_id_list[0][0])
+					output_lexical_scores[idx].append(positive_score_list[0][0])
 
 		return (
-			output_semantic_ids,
+			output_semantic_ids,  # List[List[]]
 			output_lexical_ids,
 			output_semantic_scores,
 			output_lexical_scores,

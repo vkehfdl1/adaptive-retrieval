@@ -1,6 +1,7 @@
 """
 Code from the original paper
 https://github.com/microsoft/multifield-adaptive-retrieval/blob/main/mfar/modeling/weighting.py
+and modified by me
 """
 
 import torch
@@ -13,25 +14,18 @@ class LinearWeights(torch.nn.Module):
 	2) Query conditioning over weights
 	"""
 
-	def __init__(self, emb_size, num_fields, query_cond=False):
+	def __init__(self, emb_size):
 		super(LinearWeights, self).__init__()
-		self.query_cond = query_cond
 		# emb_size = 1 if no query conditioning
-		self.weight = torch.nn.Parameter(
-			torch.ones(emb_size, num_fields), requires_grad=True
-		)
+		self.weight = torch.nn.Parameter(torch.ones(emb_size, 1), requires_grad=True)
 
 	def forward(
 		self,
-		x,  # [Batch, Samples, Field]
-		q,  # Optional([Batch, Embedding dimension]) # Query Embedding
+		q,  # [Batch, Embedding dimension] # Query Embedding
 	) -> torch.Tensor:  # [Batch, Samples]
 		"""
 		The batch size of x and q must be the same or else this should fail, or the math will be wrong.
 		"""
-		if self.query_cond:
-			weights = q @ self.weight  # [Batch, Emb] * [Emb, Field] -> [Batch, Field]
-		else:
-			weights = self.weight.transpose(1, 0)  # [1, Field]
-		weights_dist = torch.softmax(weights, dim=1)  # [ ?, Field]
-		return torch.sum(weights_dist.unsqueeze(1) * x, dim=-1)
+		weights = q @ self.weight  # [Batch, Emb] * [Emb, 1] -> [Batch, 1]
+		weights_dist = torch.sigmoid(weights)  # [Batch, 1]
+		return weights_dist

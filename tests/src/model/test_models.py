@@ -1,0 +1,40 @@
+import itertools
+from pathlib import Path
+
+import pandas as pd
+
+from src.model.train import MfarTrainingModule
+
+
+root_dir = Path(__file__).parent.parent.parent.parent
+project_dir = root_dir / "projects" / "allganize"
+
+
+def test_training_module_retrieve():
+	training_module = MfarTrainingModule(str(project_dir))
+	qa_df = pd.read_parquet(project_dir / "data" / "qa.parquet", engine="pyarrow")
+	input_queries = qa_df["query"].iloc[:5].tolist()
+	input_retrieval_gt = qa_df["retrieval_gt"].iloc[:5].tolist()
+
+	semantic_ids, lexical_ids, semantic_scores, lexical_scores = (
+		training_module.retrieve(input_queries, input_retrieval_gt)
+	)
+
+	assert (
+		len(semantic_ids)
+		== len(semantic_scores)
+		== len(lexical_ids)
+		== len(lexical_scores)
+		== 5
+	)
+	assert all(
+		len(lst1) == len(lst2) for lst1, lst2 in zip(semantic_scores, semantic_ids)
+	)
+	assert all(
+		len(lst1) == len(lst2) for lst1, lst2 in zip(lexical_scores, lexical_ids)
+	)
+
+	for idx, gt_list in enumerate(input_retrieval_gt):
+		gt_list = list(itertools.chain.from_iterable(gt_list))
+		assert len(set(semantic_ids[idx]) & set(gt_list)) > 0
+		assert len(set(lexical_ids[idx]) & set(gt_list)) > 0

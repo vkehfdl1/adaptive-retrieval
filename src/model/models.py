@@ -24,7 +24,7 @@ class LinearWeights(torch.nn.Module):
 	def forward(
 		self,
 		x,  # [Batch, Samples, Field]
-		q,  # Optional([Batch, Emb])
+		q,  # Optional([Batch, Embedding dimension]) # Query Embedding
 	) -> torch.Tensor:  # [Batch, Samples]
 		"""
 		The batch size of x and q must be the same or else this should fail, or the math will be wrong.

@@ -21,6 +21,23 @@ class AutoRAGQADataset(Dataset):
 		}
 
 
+class AutoRAGDataLoader(DataLoader):
+	def __init__(self, **kwargs):
+		super().__init__(
+			collate_fn=self._collate_fn,
+			**kwargs,
+		)
+
+	def _collate_fn(self, batch):
+		queries = list(map(lambda x: x["query"], batch))
+		retrieval_gt_list = list(map(lambda x: x["retrieval_gt"], batch))
+
+		return {
+			"query": queries,
+			"retrieval_gt": retrieval_gt_list,
+		}
+
+
 class MfarDataModule(pl.LightningDataModule):
 	def __init__(
 		self,
@@ -46,13 +63,19 @@ class MfarDataModule(pl.LightningDataModule):
 			self.test_dataset = AutoRAGQADataset(df)
 
 	def train_dataloader(self):
-		return DataLoader(self.train_dataset, shuffle=True, batch_size=self.batch_size)
+		return AutoRAGDataLoader(
+			dataset=self.train_dataset, shuffle=True, batch_size=self.batch_size
+		)
 
 	def val_dataloader(self):
-		return DataLoader(self.valid_dataset, shuffle=False, batch_size=self.batch_size)
+		return AutoRAGDataLoader(
+			dataset=self.valid_dataset, shuffle=False, batch_size=self.batch_size
+		)
 
 	def test_dataloader(self):
-		return DataLoader(self.test_dataset, shuffle=False, batch_size=self.batch_size)
+		return AutoRAGDataLoader(
+			dataset=self.test_dataset, shuffle=False, batch_size=self.batch_size
+		)
 
 	def predict_dataloader(self):
 		return self.test_dataloader()

@@ -28,4 +28,4 @@ class LinearWeights(torch.nn.Module):
 		"""
 		weights = q @ self.weight  # [Batch, Emb] * [Emb, 1] -> [Batch, 1]
 		weights_dist = torch.sigmoid(weights)  # [Batch, 1]
-		return weights_dist.squeeze()
+		return weights_dist.squeeze()  # [Batch]

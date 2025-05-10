@@ -1,12 +1,16 @@
 import itertools
 from typing import List, Optional
 
+import click
 import pytorch_lightning as pl
 import torch
 from autorag.nodes.retrieval import VectorDB, BM25
 from autorag.nodes.retrieval.hybrid_cc import fuse_per_query
+from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint, EarlyStopping
+from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities.types import OptimizerLRScheduler
 
+from src.data.mfar import MfarDataModule
 from src.model.losses import ContrastiveLoss
 from src.model.models import LinearWeights
 
@@ -32,6 +36,7 @@ class MfarTrainingModule(pl.LightningModule):
 		vectordb_name: str = "kure",
 		top_k: int = 20,
 		temperature: float = 1.0,
+		lr: float = 1e-3,
 	):
 		super().__init__()
 		self.vectordb_retrieval = VectorDB(project_dir, vectordb_name)
@@ -39,6 +44,7 @@ class MfarTrainingModule(pl.LightningModule):
 		self.embedding_dimension = 1024
 		self.top_k = top_k
 		self.temperature = temperature
+		self.lr = lr
 
 		self.layer = LinearWeights(self.embedding_dimension)
 
@@ -117,7 +123,7 @@ class MfarTrainingModule(pl.LightningModule):
 
 	def configure_optimizers(self) -> OptimizerLRScheduler:
 		optimizer = torch.optim.Adam(
-			self.layer.parameters(), self.opt.lr, betas=(0.9, 0.999)
+			self.layer.parameters(), self.lr, betas=(0.9, 0.999)
 		)
 		return [optimizer]
 
@@ -188,3 +194,47 @@ class MfarTrainingModule(pl.LightningModule):
 			output_semantic_scores,
 			output_lexical_scores,
 		)
+
+
+@click.command()
+@click.option(
+	"--project_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
+)
+@click.option(
+	"--train_data_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+)
+@click.option(
+	"--test_data_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+)
+@click.option(
+	"--checkpoint_path", type=click.Path(exists=True, dir_okay=True, file_okay=False)
+)
+def main(
+	project_dir: str, train_data_path: str, test_data_path: str, checkpoint_path: str
+):
+	train_module = MfarTrainingModule(project_dir, temperature=0.7)
+	data_module = MfarDataModule(train_data_path, test_data_path)
+
+	tqdm_cb = TQDMProgressBar(refresh_rate=10)
+	ckpt_cb = ModelCheckpoint(
+		dirpath=checkpoint_path,
+		filename="{epoch:02d}-{val_loss:.2f}",
+		save_last=True,
+	)
+	wandb_logger = WandbLogger(name="first_train", project="adaptive-retrieval")
+
+	early_stop_callback = EarlyStopping(
+		monitor="val_loss", min_delta=0.00, patience=3, verbose=False, mode="min"
+	)
+
+	trainer = pl.Trainer(
+		max_epochs=10,
+		log_every_n_steps=8,
+		logger=wandb_logger,
+		callbacks=[tqdm_cb, ckpt_cb, early_stop_callback],
+	)
+	trainer.fit(train_module, data_module)
+
+
+if __name__ == "__main__":
+	main()

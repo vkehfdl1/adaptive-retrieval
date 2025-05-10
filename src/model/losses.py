@@ -2,7 +2,6 @@ import itertools
 from typing import List
 
 import torch
-from autorag.nodes.retrieval.hybrid_cc import hybrid_cc
 from torch import nn
 
 # 한 batch에 대해서 들어오는 것들
@@ -27,21 +26,10 @@ class ContrastiveLoss(nn.Module):
 
 	def forward(
 		self,
-		semantic_ids: List[List[str]],
-		lexical_ids: List[List[str]],
-		semantic_scores: List[List[float]],
-		lexical_scores: List[List[float]],
-		predicted_weight: float,
+		cc_result_ids: List[List[str]],
+		cc_result_scores: List[List[float]],
 		retrieval_gt_list,
 	):
-		cc_result_ids, cc_result_scores = hybrid_cc(
-			ids=(semantic_ids, lexical_ids),
-			scores=(semantic_scores, lexical_scores),
-			top_k=self.top_k,
-			weight=predicted_weight,
-			normalize_method="tmm",
-		)
-
 		# Get positive sample scores and negative sample scores
 		retrieval_gt_list = [
 			list(itertools.chain.from_iterable(retrieval_gt))

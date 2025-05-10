@@ -30,13 +30,9 @@ def test_contrastive_loss_basic():
 	"""Test basic functionality of ContrastiveLoss."""
 	loss_fn = ContrastiveLoss(sample_limit=6, temperature=0.5)
 
-	predicted_weight = 0.7
 	loss = loss_fn(
 		sample_ids_3[0],
-		sample_ids_3[1],
 		sample_scores_3[0],
-		sample_scores_3[1],
-		predicted_weight,
 		sample_retrieval_gt_3,
 	)
 
@@ -45,11 +41,8 @@ def test_contrastive_loss_basic():
 	assert loss.shape == torch.Size([]), "Loss should be a scalar"
 
 	second_loss = loss_fn(
-		sample_ids_3[0],
 		sample_ids_3[1],
-		sample_scores_3[0],
 		sample_scores_3[1],
-		0.3,
 		sample_retrieval_gt_3,
 	)
 	assert isinstance(second_loss, torch.Tensor), "Loss should be a torch Tensor"

@@ -16,7 +16,7 @@ class AutoRAGQADataset(Dataset):
 	def __getitem__(self, idx: int):
 		row = self.df.iloc[idx]
 		return {
-			"query": row["query"],
+			"query": row["query"] if isinstance(row["query"], str) else row["query"][0],
 			"retrieval_gt": to_list(row["retrieval_gt"]),
 		}
 

@@ -5,7 +5,9 @@ import pytorch_lightning as pl
 import torch
 from autorag.nodes.retrieval import VectorDB, BM25
 from autorag.nodes.retrieval.hybrid_cc import fuse_per_query
+from pytorch_lightning.utilities.types import OptimizerLRScheduler
 
+from src.model.losses import ContrastiveLoss
 from src.model.models import LinearWeights
 
 
@@ -29,12 +31,14 @@ class MfarTrainingModule(pl.LightningModule):
 		project_dir: str,
 		vectordb_name: str = "kure",
 		top_k: int = 20,
+		temperature: float = 1.0,
 	):
 		super().__init__()
 		self.vectordb_retrieval = VectorDB(project_dir, vectordb_name)
 		self.bm25_retrieval = BM25(project_dir, bm25_tokenizer="ko_kiwi")
 		self.embedding_dimension = 1024
 		self.top_k = top_k
+		self.temperature = temperature
 
 		self.layer = LinearWeights(self.embedding_dimension)
 
@@ -51,30 +55,71 @@ class MfarTrainingModule(pl.LightningModule):
 			semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
 				x, retrieval_gt=None
 			)
-			result_ids, result_scores = [], []
-			for idx, weight in enumerate(predicted_weight.tolist()):
-				result_id_list, result_score_list = fuse_per_query(
-					semantic_ids[idx],
-					lexical_ids[idx],
-					semantic_scores[idx],
-					lexical_scores[idx],
-					top_k=self.top_k,
-					weight=weight,
-					normalize_method="tmm",
-					semantic_theoretical_min_value=-1.0,
-					lexical_theoretical_min_value=0.0,
-				)
-				result_ids.append(result_id_list)
-				result_scores.append(result_score_list)
-
+			result_ids, result_scores = self.hybrid_cc_weights(
+				predicted_weight,
+				semantic_ids,
+				lexical_ids,
+				semantic_scores,
+				lexical_scores,
+			)
 			return {
 				"ids": result_ids,
 				"scores": result_scores,
 			}
 
 	def training_step(self, batch, batch_idx):
-		# queries = batch["queries"]
-		pass
+		queries = batch["query"]
+		retrieval_gt = batch["retrieval_gt"]
+		semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
+			queries, retrieval_gt=retrieval_gt
+		)
+
+		with torch.no_grad():
+			embedding_list = (
+				self.vectordb_retrieval.embedding_model._get_text_embeddings(queries)
+			)
+		predicted_weight = self.layer(torch.Tensor(embedding_list))
+		cc_result_ids, cc_result_scores = self.hybrid_cc_weights(
+			predicted_weight, semantic_ids, lexical_ids, semantic_scores, lexical_scores
+		)
+
+		contrastive_loss = ContrastiveLoss(
+			sample_limit=self.top_k, temperature=self.temperature
+		)
+		loss = contrastive_loss(cc_result_ids, cc_result_scores, retrieval_gt)
+		self.log("train/loss", loss.item())
+		return loss
+
+	def hybrid_cc_weights(
+		self,
+		weights: torch.Tensor,
+		semantic_ids,
+		lexical_ids,
+		semantic_scores,
+		lexical_scores,
+	):
+		result_ids, result_scores = [], []
+		for idx, weight in enumerate(weights.tolist()):
+			result_id_list, result_score_list = fuse_per_query(
+				semantic_ids[idx],
+				lexical_ids[idx],
+				semantic_scores[idx],
+				lexical_scores[idx],
+				top_k=self.top_k,
+				weight=weight,
+				normalize_method="tmm",
+				semantic_theoretical_min_value=-1.0,
+				lexical_theoretical_min_value=0.0,
+			)
+			result_ids.append(result_id_list)
+			result_scores.append(result_score_list)
+		return result_ids, result_scores
+
+	def configure_optimizers(self) -> OptimizerLRScheduler:
+		optimizer = torch.optim.Adam(
+			self.layer.parameters(), self.opt.lr, betas=(0.9, 0.999)
+		)
+		return [optimizer]
 
 	def retrieve(self, queries: List[str], retrieval_gt: Optional[List[List]] = None):
 		"""The result can be `unsorted`."""

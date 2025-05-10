@@ -228,6 +228,7 @@ def main(
 	)
 
 	trainer = pl.Trainer(
+		accelerator="cpu",
 		max_epochs=10,
 		log_every_n_steps=8,
 		logger=wandb_logger,

@@ -30,42 +30,54 @@ class ContrastiveLoss(nn.Module):
 		cc_result_scores: List[List[float]],
 		retrieval_gt_list,
 	):
-		# Get positive sample scores and negative sample scores
+		# Flatten the retrieval ground truth list
 		retrieval_gt_list = [
 			list(itertools.chain.from_iterable(retrieval_gt))
 			for retrieval_gt in retrieval_gt_list
 		]
 
-		positive_score_list, negative_score_list = [], []
+		# Process the scores
+		result_list = []
 		for cc_result_id_list, cc_result_scores_list, retrieval_gt in zip(
 			cc_result_ids, cc_result_scores, retrieval_gt_list
 		):
-			positive_scores = []
-			negative_scores = []
-			for j, idx in enumerate(cc_result_id_list):
-				if idx in retrieval_gt:
-					positive_scores.append(cc_result_scores_list[j])
-				else:
-					negative_scores.append(cc_result_scores_list[j])
+			# Convert input scores to tensors if they aren't already
+			if not isinstance(cc_result_scores_list, torch.Tensor):
+				cc_result_scores_tensor = torch.tensor(
+					cc_result_scores_list, dtype=torch.float, requires_grad=True
+				)
+			else:
+				cc_result_scores_tensor = cc_result_scores_list
 
-			positive_score_list.append(positive_scores)
-			negative_score_list.append(negative_scores)
+			# Create masks for positive and negative samples
+			positive_mask = torch.tensor(
+				[idx in retrieval_gt for idx in cc_result_id_list], dtype=torch.bool
+			)
+			negative_mask = ~positive_mask
 
-		result_list = []
-		for positive_scores, negative_scores in zip(
-			positive_score_list, negative_score_list
-		):
-			positive_scores_tensor = torch.tensor(positive_scores)
-			negative_scores_tensor = torch.tensor(negative_scores)
+			# Apply masks to get positive and negative scores
+			positive_scores = cc_result_scores_tensor[positive_mask]
+			negative_scores = cc_result_scores_tensor[negative_mask]
+
+			# Skip samples with no positive or negative examples
+			if positive_scores.numel() == 0 or negative_scores.numel() == 0:
+				continue
+
+			# Calculate loss
 			sum_positive_samples = torch.sum(
-				torch.exp(positive_scores_tensor / self.temperature)
+				torch.exp(positive_scores / self.temperature)
 			)
 			sum_negative_samples = torch.sum(
-				torch.exp(negative_scores_tensor / self.temperature)
+				torch.exp(negative_scores / self.temperature)
 			)
 			loss = -torch.log(
 				sum_positive_samples
 				/ (sum_positive_samples + sum_negative_samples + 1e-10)
 			)
 			result_list.append(loss)
-		return torch.mean(torch.stack(result_list))
+
+		# Return mean loss if we have results, otherwise return zero tensor with grad
+		if result_list:
+			return torch.mean(torch.stack(result_list))
+		else:
+			return torch.tensor(0.0, requires_grad=True)

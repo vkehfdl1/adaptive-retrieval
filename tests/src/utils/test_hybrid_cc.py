@@ -1,0 +1,52 @@
+import torch
+
+from src.utils.hybrid_cc import normalize_tmm_torch, hybrid_cc
+
+
+def test_normalize_tmm_torch_():
+	# Test with a simple 1D tensor
+	scores = torch.tensor([1.0, 2.0, 3.0])
+	fixed_min_value = 0.0
+	normalized = normalize_tmm_torch(scores, fixed_min_value)
+	expected = torch.Tensor([0.3333, 0.6667, 1.0])
+	assert torch.allclose(
+		normalized, expected, rtol=1e-3
+	), "normalize_tmm_torch did not normalize correctly"
+
+	# Test with a 2D tensor
+	scores_2d = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+	normalized_2d = normalize_tmm_torch(scores_2d, fixed_min_value)
+	expected_2d = torch.Tensor([[0.25, 0.5], [0.75, 1.0]])
+	assert torch.allclose(
+		normalized_2d, expected_2d
+	), "normalize_tmm_torch failed with 2D input"
+
+	# Test with negative min value
+	neg_min = -1.0
+	normalized_neg = normalize_tmm_torch(scores, neg_min)
+	expected_neg = torch.Tensor([0.5, 0.75, 1.0])
+	assert torch.allclose(
+		normalized_neg, expected_neg
+	), "normalize_tmm_torch failed with negative min value"
+
+
+def test_hybrid_cc():
+	# Test with sample inputs
+	weights = torch.tensor([0.3, 0.7])
+	semantic_scores = torch.tensor([[2.0, 4.0], [1.0, 3.0]])
+	# normalize => [[0.6, 1.0], [0.4, 0.8]]
+	lexical_scores = torch.tensor([[1.0, 4.0], [2.0, 5.0]])
+	# normalize => [[0.2, 0.8], [0.4, 1.0]]
+
+	result = hybrid_cc(weights, semantic_scores, lexical_scores)
+	expected = torch.Tensor([[0.32, 0.86], [0.4, 0.86]])
+	assert torch.allclose(
+		result, expected
+	), "hybrid_cc did not compute the expected weighted sum"
+
+	# Test with different weights
+	weights2 = torch.tensor([0.9, 0.1])
+	result2 = hybrid_cc(weights2, semantic_scores, lexical_scores)
+	expected2 = torch.Tensor([[0.56, 0.98], [0.4, 0.98]])
+
+	assert torch.allclose(result2, expected2), "hybrid_cc failed with different weights"

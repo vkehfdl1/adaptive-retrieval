@@ -2,7 +2,6 @@ import itertools
 from datetime import datetime
 from typing import List, Optional
 
-import click
 import pytorch_lightning as pl
 import torch
 from autorag.evaluation import evaluate_retrieval
@@ -220,7 +219,7 @@ class MfarTrainingModule(pl.LightningModule):
 					positive_id = retrieval_gt[idx][0]
 					positive_id_list, positive_score_list = (
 						self.chroma_retrieval.get_ids_scores(
-							[batch["query_emebddings"].tolist()[idx]], [[positive_id]]
+							[batch["query_embeddings"].tolist()[idx]], [[positive_id]]
 						)
 					)
 					output_semantic_ids[idx].append(positive_id_list[0][0])
@@ -271,23 +270,23 @@ class MfarTrainingModule(pl.LightningModule):
 		)
 
 
-@click.command()
-@click.option(
-	"--project_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
-)
-@click.option("--chroma_path", type=click.Path(exists=True, dir_okay=True))
-@click.option(
-	"--train_data_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
-)
-@click.option(
-	"--semantic_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
-)
-@click.option(
-	"--lexical_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
-)
-@click.option(
-	"--checkpoint_path", type=click.Path(exists=True, dir_okay=True, file_okay=False)
-)
+# @click.command()
+# @click.option(
+# 	"--project_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
+# )
+# @click.option("--chroma_path", type=click.Path(exists=True, dir_okay=True))
+# @click.option(
+# 	"--train_data_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+# )
+# @click.option(
+# 	"--semantic_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+# )
+# @click.option(
+# 	"--lexical_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+# )
+# @click.option(
+# 	"--checkpoint_path", type=click.Path(exists=True, dir_okay=True, file_okay=False)
+# )
 def main(
 	project_dir: str,
 	chroma_path: str,
@@ -326,14 +325,35 @@ def main(
 
 
 if __name__ == "__main__":
-	# from pathlib import Path
-	# root_dir = Path(__file__).parent.parent.parent
-	# main(
-	# 	project_dir=str(root_dir / "projects" / "ko-strategyqa-dev"),
-	# 	chroma_path=str(root_dir / "projects" / "ko-strategyqa-dev" / "resources" / "chroma"),
-	# 	train_data_path=str(root_dir / "data" / "ko-strategyqa" / "qa_train_embeddings.parquet"),
-	# 	semantic_path=str(root_dir / "projects" / "ko-strategyqa-train" / "1" / "retrieve_node_line" / "retrieval" / "0.parquet"),
-	# 	lexical_path=str(root_dir / "projects" / "ko-strategyqa-train" / "1" / "retrieve_node_line" / "retrieval" / "1.parquet"),
-	# 	checkpoint_path=str(root_dir / "train_result"),
-	# )
-	main()
+	from pathlib import Path
+
+	root_dir = Path(__file__).parent.parent.parent
+	main(
+		project_dir=str(root_dir / "projects" / "ko-strategyqa-dev"),
+		chroma_path=str(
+			root_dir / "projects" / "ko-strategyqa-dev" / "resources" / "chroma"
+		),
+		train_data_path=str(
+			root_dir / "data" / "ko-strategyqa" / "qa_train_embeddings.parquet"
+		),
+		semantic_path=str(
+			root_dir
+			/ "projects"
+			/ "ko-strategyqa-train"
+			/ "1"
+			/ "retrieve_node_line"
+			/ "retrieval"
+			/ "0.parquet"
+		),
+		lexical_path=str(
+			root_dir
+			/ "projects"
+			/ "ko-strategyqa-train"
+			/ "1"
+			/ "retrieve_node_line"
+			/ "retrieval"
+			/ "1.parquet"
+		),
+		checkpoint_path=str(root_dir / "train_result"),
+	)
+	# main()

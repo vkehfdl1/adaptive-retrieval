@@ -38,13 +38,13 @@ class AutoRAGQADataset(Dataset):
 				self.semantic_df.iloc[idx]["retrieved_ids"]
 			),
 			"semantic_retrieve_scores": torch.from_numpy(
-				self.semantic_df.iloc[idx]["retrieve_scores"]
+				self.semantic_df.iloc[idx]["retrieve_scores"].copy()
 			).float(),
 			"lexical_retrieved_ids": to_list(
 				self.lexical_df.iloc[idx]["retrieved_ids"]
 			),
 			"lexical_retrieve_scores": torch.from_numpy(
-				self.lexical_df.iloc[idx]["retrieve_scores"]
+				self.lexical_df.iloc[idx]["retrieve_scores"].copy()
 			).float(),
 		}
 

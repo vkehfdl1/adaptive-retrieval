@@ -1,13 +1,15 @@
 import pandas as pd
 import pytorch_lightning as pl
-from autorag.utils import validate_qa_dataset
+import torch
 from autorag.utils.util import to_list
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, default_collate
 
 
 class AutoRAGQADataset(Dataset):
 	def __init__(self, df: pd.DataFrame):
-		validate_qa_dataset(df)
+		assert "query" in df.columns
+		assert "query_embeddings" in df.columns
+
 		self.df = df
 
 	def __len__(self):
@@ -17,6 +19,7 @@ class AutoRAGQADataset(Dataset):
 		row = self.df.iloc[idx]
 		return {
 			"query": row["query"] if isinstance(row["query"], str) else row["query"][0],
+			"query_embeddings": torch.Tensor(row["query_embeddings"]),
 			"retrieval_gt": to_list(row["retrieval_gt"]),
 		}
 
@@ -31,10 +34,14 @@ class AutoRAGDataLoader(DataLoader):
 	def _collate_fn(self, batch):
 		queries = list(map(lambda x: x["query"], batch))
 		retrieval_gt_list = list(map(lambda x: x["retrieval_gt"], batch))
+		collate_query_embeddings = default_collate(
+			list(map(lambda x: x["query_embeddings"], batch))
+		)
 
 		return {
 			"query": queries,
 			"retrieval_gt": retrieval_gt_list,
+			"query_embeddings": collate_query_embeddings,
 		}
 
 

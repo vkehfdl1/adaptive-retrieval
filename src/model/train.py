@@ -80,7 +80,7 @@ class MfarTrainingModule(pl.LightningModule):
 		queries = batch["query"]
 		retrieval_gt = batch["retrieval_gt"]
 		semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
-			queries, batch["query_embeddings"], retrieval_gt=retrieval_gt
+			queries, batch["query_embeddings"].tolist(), retrieval_gt=retrieval_gt
 		)
 
 		predicted_weight = self.layer(batch["query_embeddings"])
@@ -99,7 +99,7 @@ class MfarTrainingModule(pl.LightningModule):
 		queries = batch["query"]
 		retrieval_gt = batch["retrieval_gt"]
 		semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
-			queries, batch["query_embeddings"], retrieval_gt=retrieval_gt
+			queries, batch["query_embeddings"].tolist(), retrieval_gt=retrieval_gt
 		)
 
 		with torch.no_grad():
@@ -117,20 +117,11 @@ class MfarTrainingModule(pl.LightningModule):
 			loss = contrastive_loss(cc_result_ids, cc_result_scores, retrieval_gt)
 		self.log("val/loss", loss.item())
 
-		return {
-			"loss": loss,
-			"pred_ids": cc_result_ids,
-			"pred_scores": cc_result_scores,
-			"retrieval_gt": retrieval_gt,
-		}
-
-	def validation_epoch_end(self, validation_step_outputs):
-		# Calculate Metric
 		@evaluate_retrieval(
 			metric_inputs=list(
 				map(
 					lambda x: MetricInput(retrieval_gt=x),
-					validation_step_outputs["retrieval_gt"],
+					retrieval_gt,
 				)
 			),
 			metrics=[
@@ -144,9 +135,9 @@ class MfarTrainingModule(pl.LightningModule):
 		)
 		def calculate_metrics():
 			return (
-				[],
-				validation_step_outputs["pred_ids"],
-				validation_step_outputs["pred_scores"],
+				["" for _ in range(len(cc_result_ids))],
+				cc_result_ids,
+				cc_result_scores,
 			)
 
 		evaluate_result = calculate_metrics()
@@ -266,6 +257,7 @@ class MfarTrainingModule(pl.LightningModule):
 @click.option(
 	"--project_dir", type=click.Path(exists=True, dir_okay=True, file_okay=False)
 )
+@click.option("--chroma_path", type=click.Path(exists=True, dir_okay=True))
 @click.option(
 	"--train_data_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
@@ -276,10 +268,14 @@ class MfarTrainingModule(pl.LightningModule):
 	"--checkpoint_path", type=click.Path(exists=True, dir_okay=True, file_okay=False)
 )
 def main(
-	project_dir: str, train_data_path: str, test_data_path: str, checkpoint_path: str
+	project_dir: str,
+	chroma_path: str,
+	train_data_path: str,
+	test_data_path: str,
+	checkpoint_path: str,
 ):
-	train_module = MfarTrainingModule(project_dir, temperature=0.7)
-	data_module = MfarDataModule(train_data_path, test_data_path)
+	train_module = MfarTrainingModule(project_dir, chroma_path, temperature=0.7)
+	data_module = MfarDataModule(train_data_path, test_data_path, num_workers=9)
 
 	tqdm_cb = TQDMProgressBar(refresh_rate=10)
 	ckpt_cb = ModelCheckpoint(
@@ -299,6 +295,7 @@ def main(
 		log_every_n_steps=8,
 		logger=wandb_logger,
 		callbacks=[tqdm_cb, ckpt_cb, early_stop_callback],
+		check_val_every_n_epoch=1,
 	)
 	trainer.fit(train_module, data_module)
 

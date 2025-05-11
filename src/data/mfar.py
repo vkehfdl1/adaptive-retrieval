@@ -51,11 +51,13 @@ class MfarDataModule(pl.LightningDataModule):
 		qa_train_data_path,
 		qa_test_data_path,
 		batch_size: int = 32,
+		num_workers: int = 0,
 	):
 		super().__init__()
 		self.qa_train_data_path = qa_train_data_path
 		self.qa_test_data_path = qa_test_data_path
 		self.batch_size = batch_size
+		self.num_workers = num_workers
 
 	def setup(self, stage):
 		if stage == "fit":
@@ -71,17 +73,26 @@ class MfarDataModule(pl.LightningDataModule):
 
 	def train_dataloader(self):
 		return AutoRAGDataLoader(
-			dataset=self.train_dataset, shuffle=True, batch_size=self.batch_size
+			dataset=self.train_dataset,
+			shuffle=True,
+			batch_size=self.batch_size,
+			num_workers=self.num_workers,
 		)
 
 	def val_dataloader(self):
 		return AutoRAGDataLoader(
-			dataset=self.valid_dataset, shuffle=False, batch_size=self.batch_size
+			dataset=self.valid_dataset,
+			shuffle=False,
+			batch_size=self.batch_size,
+			num_workers=self.num_workers,
 		)
 
 	def test_dataloader(self):
 		return AutoRAGDataLoader(
-			dataset=self.test_dataset, shuffle=False, batch_size=self.batch_size
+			dataset=self.test_dataset,
+			shuffle=False,
+			batch_size=self.batch_size,
+			num_workers=self.num_workers,
 		)
 
 	def predict_dataloader(self):

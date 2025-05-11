@@ -112,7 +112,7 @@ class MfarTrainingModule(pl.LightningModule):
 
 		with torch.no_grad():
 			predicted_weight = self.layer(batch["query_embeddings"])
-			batch = batch.pop("retrieval_gt")
+			batch.pop("retrieval_gt")
 			semantic_ids, lexical_ids, semantic_scores, lexical_scores = (
 				self.retrieve_non_duplicate(batch)
 			)
@@ -326,4 +326,14 @@ def main(
 
 
 if __name__ == "__main__":
+	# from pathlib import Path
+	# root_dir = Path(__file__).parent.parent.parent
+	# main(
+	# 	project_dir=str(root_dir / "projects" / "ko-strategyqa-dev"),
+	# 	chroma_path=str(root_dir / "projects" / "ko-strategyqa-dev" / "resources" / "chroma"),
+	# 	train_data_path=str(root_dir / "data" / "ko-strategyqa" / "qa_train_embeddings.parquet"),
+	# 	semantic_path=str(root_dir / "projects" / "ko-strategyqa-train" / "1" / "retrieve_node_line" / "retrieval" / "0.parquet"),
+	# 	lexical_path=str(root_dir / "projects" / "ko-strategyqa-train" / "1" / "retrieve_node_line" / "retrieval" / "1.parquet"),
+	# 	checkpoint_path=str(root_dir / "train_result"),
+	# )
 	main()

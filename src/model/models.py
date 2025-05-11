@@ -26,7 +26,6 @@ class LinearWeights(torch.nn.Module):
 		"""
 		The batch size of x and q must be the same or else this should fail, or the math will be wrong.
 		"""
-		q = q.float()
 		weights = q @ self.weight  # [Batch, Emb] * [Emb, 1] -> [Batch, 1]
 		weights_dist = torch.sigmoid(weights)  # [Batch, 1]
 		return weights_dist.squeeze()  # [Batch]

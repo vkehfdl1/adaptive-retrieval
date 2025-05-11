@@ -19,7 +19,9 @@ class AutoRAGQADataset(Dataset):
 		row = self.df.iloc[idx]
 		return {
 			"query": row["query"] if isinstance(row["query"], str) else row["query"][0],
-			"query_embeddings": torch.from_numpy(row["query_embeddings"].copy()),
+			"query_embeddings": torch.from_numpy(
+				row["query_embeddings"].copy()
+			).float(),
 			"retrieval_gt": to_list(row["retrieval_gt"]),
 		}
 

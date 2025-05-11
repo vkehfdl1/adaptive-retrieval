@@ -78,10 +78,10 @@ class MfarTrainingModule(pl.LightningModule):
 		queries = batch["query"]
 		retrieval_gt = batch["retrieval_gt"]
 		semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
-			queries, retrieval_gt=retrieval_gt
+			queries, batch["query_embeddings"], retrieval_gt=retrieval_gt
 		)
 
-		predicted_weight = self.layer(torch.Tensor(embedding_list))
+		predicted_weight = self.layer(batch["query_embeddings"])
 		cc_result_ids, cc_result_scores = self.hybrid_cc_weights(
 			predicted_weight, semantic_ids, lexical_ids, semantic_scores, lexical_scores
 		)
@@ -97,11 +97,11 @@ class MfarTrainingModule(pl.LightningModule):
 		queries = batch["query"]
 		retrieval_gt = batch["retrieval_gt"]
 		semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
-			queries, retrieval_gt=retrieval_gt
+			queries, batch["query_embeddings"], retrieval_gt=retrieval_gt
 		)
 
 		with torch.no_grad():
-			predicted_weight = self.layer(torch.Tensor(embedding_list))
+			predicted_weight = self.layer(batch["query_embeddings"])
 			cc_result_ids, cc_result_scores = self.hybrid_cc_weights(
 				predicted_weight,
 				semantic_ids,

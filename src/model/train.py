@@ -280,7 +280,10 @@ class MfarTrainingModule(pl.LightningModule):
 	"--train_data_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.option(
-	"--test_data_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+	"--semantic_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
+)
+@click.option(
+	"--lexical_path", type=click.Path(exists=True, dir_okay=False, file_okay=True)
 )
 @click.option(
 	"--checkpoint_path", type=click.Path(exists=True, dir_okay=True, file_okay=False)
@@ -289,17 +292,22 @@ def main(
 	project_dir: str,
 	chroma_path: str,
 	train_data_path: str,
-	test_data_path: str,
+	semantic_path: str,
+	lexical_path: str,
 	checkpoint_path: str,
 ):
 	train_module = MfarTrainingModule(project_dir, chroma_path, temperature=0.7)
-	data_module = MfarDataModule(train_data_path, test_data_path, num_workers=6)
+	data_module = MfarDataModule(
+		train_data_path, semantic_path, lexical_path, num_workers=6
+	)
 
 	tqdm_cb = TQDMProgressBar(refresh_rate=10)
 	ckpt_cb = ModelCheckpoint(
 		dirpath=checkpoint_path,
-		filename="{epoch:02d}-{val_loss:.2f}",
+		filename="{epoch:02d}-{step}-{val_loss:.2f}",
 		save_last=True,
+		every_n_epochs=1,
+		every_n_train_steps=50,
 	)
 	wandb_logger = WandbLogger(name=str(datetime.now()), project="adaptive-retrieval")
 

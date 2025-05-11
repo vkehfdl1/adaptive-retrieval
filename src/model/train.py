@@ -7,7 +7,6 @@ import pytorch_lightning as pl
 import torch
 from autorag.evaluation import evaluate_retrieval
 from autorag.nodes.retrieval import BM25
-from autorag.nodes.retrieval.hybrid_cc import fuse_per_query
 from autorag.schema.metricinput import MetricInput
 from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
@@ -17,6 +16,7 @@ from src.data.mfar import MfarDataModule
 from src.model.losses import ContrastiveLoss
 from src.model.models import LinearWeights
 from src.utils.chroma import ChromaOnlyEmbeddings
+from src.utils.hybrid_cc import hybrid_cc, sort_list_to_cc
 
 
 def get_non_duplicate_ids(target_ids, compare_ids) -> List[List[str]]:
@@ -64,58 +64,83 @@ class MfarTrainingModule(pl.LightningModule):
 			semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
 				x["query"], x["query_embeddings"].tolist(), retrieval_gt=None
 			)
-			result_ids, result_scores = self.hybrid_cc_weights(
-				predicted_weight,
-				semantic_ids,
-				lexical_ids,
-				semantic_scores,
-				lexical_scores,
+			cc_ids, semantic_score_tensor, lexical_score_tensor = sort_list_to_cc(
+				semantic_ids, lexical_ids, semantic_scores, lexical_scores
 			)
+			cc_scores = hybrid_cc(
+				predicted_weight,
+				semantic_score_tensor,
+				lexical_score_tensor,
+			)
+			cc_scores = list(map(lambda x: x.tolist(), cc_scores))
+			result = [
+				(_id, score)
+				for score, _id in sorted(
+					zip(cc_scores, cc_ids), key=lambda pair: pair[0], reverse=True
+				)
+			]
+			id_result, score_result = zip(*result)
 			return {
-				"ids": result_ids,
-				"scores": result_scores,
+				"ids": list(map(lambda x: x[: self.top_k], list(id_result))),
+				"scores": list(map(lambda x: x[: self.top_k], list(score_result))),
 			}
 
 	def training_step(self, batch, batch_idx):
-		queries = batch["query"]
-		retrieval_gt = batch["retrieval_gt"]
-		semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
-			queries, batch["query_embeddings"].tolist(), retrieval_gt=retrieval_gt
-		)
-
 		predicted_weight = self.layer(batch["query_embeddings"])
-		cc_result_ids, cc_result_scores = self.hybrid_cc_weights(
-			predicted_weight, semantic_ids, lexical_ids, semantic_scores, lexical_scores
-		)
 
+		semantic_ids, lexical_ids, semantic_scores, lexical_scores = (
+			self.retrieve_non_duplicate(batch)
+		)
+		cc_ids, semantic_score_tensor, lexical_score_tensor = sort_list_to_cc(
+			semantic_ids, lexical_ids, semantic_scores, lexical_scores
+		)
+		cc_scores = hybrid_cc(
+			predicted_weight,
+			semantic_score_tensor,
+			lexical_score_tensor,
+		)
+		cc_scores = list(map(lambda x: x.tolist(), cc_scores))
 		contrastive_loss = ContrastiveLoss(
 			sample_limit=self.top_k, temperature=self.temperature
 		)
-		loss = contrastive_loss(cc_result_ids, cc_result_scores, retrieval_gt)
+		loss = contrastive_loss(cc_ids, cc_scores, batch["retrieval_gt"])
 		self.log("train/loss", loss.item())
 		return loss
 
 	def validation_step(self, batch, batch_idx):
-		queries = batch["query"]
 		retrieval_gt = batch["retrieval_gt"]
-		semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
-			queries, batch["query_embeddings"].tolist(), retrieval_gt=retrieval_gt
-		)
 
 		with torch.no_grad():
 			predicted_weight = self.layer(batch["query_embeddings"])
-			cc_result_ids, cc_result_scores = self.hybrid_cc_weights(
+			batch = batch.pop("retrieval_gt")
+			semantic_ids, lexical_ids, semantic_scores, lexical_scores = (
+				self.retrieve_non_duplicate(batch)
+			)
+			cc_ids, semantic_score_tensor, lexical_score_tensor = sort_list_to_cc(
+				semantic_ids, lexical_ids, semantic_scores, lexical_scores
+			)
+			cc_scores = hybrid_cc(
 				predicted_weight,
-				semantic_ids,
-				lexical_ids,
-				semantic_scores,
-				lexical_scores,
+				semantic_score_tensor,
+				lexical_score_tensor,
 			)
 			contrastive_loss = ContrastiveLoss(
 				sample_limit=self.top_k, temperature=self.temperature
 			)
-			loss = contrastive_loss(cc_result_ids, cc_result_scores, retrieval_gt)
+			cc_scores = list(map(lambda x: x.tolist(), cc_scores))
+			loss = contrastive_loss(cc_ids, cc_scores, retrieval_gt)
 		self.log("val_loss", loss.item())
+
+		result = [
+			(_id, score)
+			for score, _id in sorted(
+				zip(cc_scores, cc_ids), key=lambda pair: pair[0], reverse=True
+			)
+		]
+		id_result, score_result = zip(*result)
+
+		id_result = list(map(lambda x: x[: self.top_k], list(id_result)))
+		score_result = list(map(lambda x: x[: self.top_k], list(score_result)))
 
 		@evaluate_retrieval(
 			metric_inputs=list(
@@ -135,9 +160,9 @@ class MfarTrainingModule(pl.LightningModule):
 		)
 		def calculate_metrics():
 			return (
-				["" for _ in range(len(cc_result_ids))],
-				cc_result_ids,
-				cc_result_scores,
+				["" for _ in range(len(id_result))],
+				id_result,
+				score_result,
 			)
 
 		evaluate_result = calculate_metrics()
@@ -148,36 +173,74 @@ class MfarTrainingModule(pl.LightningModule):
 		self.log("map", evaluate_result["retrieval_map"].mean())
 		self.log("mrr", evaluate_result["retrieval_mrr"].mean())
 
-	def hybrid_cc_weights(
-		self,
-		weights: torch.Tensor,
-		semantic_ids,
-		lexical_ids,
-		semantic_scores,
-		lexical_scores,
-	):
-		result_ids, result_scores = [], []
-		for idx, weight in enumerate(weights.tolist()):
-			result_id_list, result_score_list = fuse_per_query(
-				semantic_ids[idx],
-				lexical_ids[idx],
-				semantic_scores[idx],
-				lexical_scores[idx],
-				top_k=self.top_k,
-				weight=weight,
-				normalize_method="tmm",
-				semantic_theoretical_min_value=-1.0,
-				lexical_theoretical_min_value=0.0,
-			)
-			result_ids.append(result_id_list)
-			result_scores.append(result_score_list)
-		return result_ids, result_scores
-
 	def configure_optimizers(self) -> OptimizerLRScheduler:
 		optimizer = torch.optim.Adam(
 			self.layer.parameters(), self.lr, betas=(0.9, 0.999)
 		)
 		return [optimizer]
+
+	def retrieve_non_duplicate(self, batch):
+		semantic_ids = batch["semantic_retrieved_ids"]
+		lexical_ids = batch["lexical_retrieved_ids"]
+		semantic_scores = batch["semantic_retrieve_scores"].tolist()
+		lexical_scores = batch["lexical_retrieve_scores"].tolist()
+		lexical_target_ids = get_non_duplicate_ids(lexical_ids, semantic_ids)
+		semantic_target_ids = get_non_duplicate_ids(semantic_ids, lexical_ids)
+
+		new_semantic_ids, new_semantic_scores = self.chroma_retrieval.get_ids_scores(
+			batch["query_embeddings"].tolist(), semantic_target_ids
+		)
+		new_lexical_ids, new_lexical_scores = self.bm25_retrieval._pure(
+			batch["query"], self.top_k, ids=lexical_target_ids
+		)
+
+		output_semantic_ids = list(
+			map(lambda x, y: x + y, semantic_ids, new_semantic_ids)
+		)
+		output_lexical_ids = list(map(lambda x, y: x + y, lexical_ids, new_lexical_ids))
+		output_semantic_scores = list(
+			map(lambda x, y: x + y, semantic_scores, new_semantic_scores)
+		)
+		output_lexical_scores = list(
+			map(lambda x, y: x + y, lexical_scores, new_lexical_scores)
+		)
+
+		assert len(output_semantic_ids) == len(output_semantic_scores)
+		assert len(output_lexical_ids) == len(output_lexical_scores)
+		assert len(output_semantic_ids) == len(batch["query"])
+
+		if "retrieval_gt" in batch.keys() and batch["retrieval_gt"] is not None:
+			retrieval_gt = batch["retrieval_gt"]
+			retrieval_gt = [
+				list(itertools.chain.from_iterable(x)) for x in retrieval_gt
+			]
+			# Add Retrieval gt when there is no positive sample
+			for idx in range(len(output_semantic_ids)):
+				if len(set(retrieval_gt[idx]) & set(output_semantic_scores[idx])) < 1:
+					positive_id = retrieval_gt[idx][0]
+					positive_id_list, positive_score_list = (
+						self.chroma_retrieval.get_ids_scores(
+							[batch["query_emebddings"].tolist()[idx]], [[positive_id]]
+						)
+					)
+					output_semantic_ids[idx].append(positive_id_list[0][0])
+					output_semantic_scores[idx].append(positive_score_list[0][0])
+
+			for idx in range(len(output_lexical_ids)):
+				if len(set(retrieval_gt[idx]) & set(output_lexical_scores[idx])) < 1:
+					positive_id = retrieval_gt[idx][0]
+					positive_id_list, positive_score_list = self.bm25_retrieval._pure(
+						[batch["query"][idx]], self.top_k, ids=[[positive_id]]
+					)
+					output_lexical_ids[idx].append(positive_id_list[0][0])
+					output_lexical_scores[idx].append(positive_score_list[0][0])
+
+		return (
+			output_semantic_ids,  # List[List[]]
+			output_lexical_ids,
+			output_semantic_scores,
+			output_lexical_scores,
+		)
 
 	def retrieve(
 		self,
@@ -195,61 +258,16 @@ class MfarTrainingModule(pl.LightningModule):
 			input_queries, self.top_k
 		)
 
-		lexical_target_ids = get_non_duplicate_ids(lexical_ids, semantic_ids)
-		semantic_target_ids = get_non_duplicate_ids(semantic_ids, lexical_ids)
-
-		new_semantic_ids, new_semantic_scores = self.chroma_retrieval.get_ids_scores(
-			query_embeddings, semantic_target_ids
-		)
-		new_lexical_ids, new_lexical_scores = self.bm25_retrieval._pure(
-			input_queries, self.top_k, ids=lexical_target_ids
-		)
-
-		output_semantic_ids = list(
-			map(lambda x, y: x + y, semantic_ids, new_semantic_ids)
-		)
-		output_lexical_ids = list(map(lambda x, y: x + y, lexical_ids, new_lexical_ids))
-		output_semantic_scores = list(
-			map(lambda x, y: x + y, semantic_scores, new_semantic_scores)
-		)
-		output_lexical_scores = list(
-			map(lambda x, y: x + y, lexical_scores, new_lexical_scores)
-		)
-
-		assert len(output_semantic_ids) == len(output_semantic_scores)
-		assert len(output_lexical_ids) == len(output_lexical_scores)
-		assert len(output_semantic_ids) == len(queries)
-
-		if retrieval_gt is not None:
-			retrieval_gt = [
-				list(itertools.chain.from_iterable(x)) for x in retrieval_gt
-			]
-			# Add Retrieval gt when there is no positive sample
-			for idx in range(len(output_semantic_ids)):
-				if len(set(retrieval_gt[idx]) & set(output_semantic_scores[idx])) < 1:
-					positive_id = retrieval_gt[idx][0]
-					positive_id_list, positive_score_list = (
-						self.chroma_retrieval.get_ids_scores(
-							[query_embeddings[idx]], [[positive_id]]
-						)
-					)
-					output_semantic_ids[idx].append(positive_id_list[0][0])
-					output_semantic_scores[idx].append(positive_score_list[0][0])
-
-			for idx in range(len(output_lexical_ids)):
-				if len(set(retrieval_gt[idx]) & set(output_lexical_scores[idx])) < 1:
-					positive_id = retrieval_gt[idx][0]
-					positive_id_list, positive_score_list = self.bm25_retrieval._pure(
-						[input_queries[idx]], self.top_k, ids=[[positive_id]]
-					)
-					output_lexical_ids[idx].append(positive_id_list[0][0])
-					output_lexical_scores[idx].append(positive_score_list[0][0])
-
-		return (
-			output_semantic_ids,  # List[List[]]
-			output_lexical_ids,
-			output_semantic_scores,
-			output_lexical_scores,
+		return self.retrieve_non_duplicate(
+			{
+				"semantic_retrieved_ids": semantic_ids,
+				"lexical_retrieved_ids": lexical_ids,
+				"semantic_retrieve_scores": torch.Tensor(semantic_scores),
+				"lexical_retrieve_scores": torch.Tensor(lexical_scores),
+				"retrieval_gt": retrieval_gt,
+				"query": queries,
+				"query_embeddings": torch.Tensor(query_embeddings),
+			}
 		)
 
 

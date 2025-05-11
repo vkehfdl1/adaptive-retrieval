@@ -3,12 +3,14 @@ from pathlib import Path
 
 import pandas as pd
 import torch
+from autorag.utils.util import to_list
 
 from src.model.train import MfarTrainingModule
 
 
 root_dir = Path(__file__).parent.parent.parent.parent
 project_dir = root_dir / "projects" / "allganize"
+data_dir = root_dir / "data" / "allganize"
 
 
 def test_training_module_retrieve():
@@ -52,6 +54,12 @@ def test_training_module_forward():
 	training_module = MfarTrainingModule(
 		str(project_dir), str(project_dir / "resources" / "chroma")
 	)
+	semantic_df = pd.read_parquet(
+		project_dir / "0" / "retrieve_node_line" / "retrieval" / "0.parquet"
+	)
+	lexical_df = pd.read_parquet(
+		project_dir / "0" / "retrieve_node_line" / "retrieval" / "3.parquet"
+	)
 	sample_queries = [
 		"최강 삼성 히어로 누구 김영웅!",
 		"중대 기계 재학생 누구 노동건!",
@@ -59,7 +67,18 @@ def test_training_module_forward():
 	]
 	sample_query_embeddings = torch.rand((3, 1024))
 	result = training_module(
-		{"query": sample_queries, "query_embeddings": sample_query_embeddings}
+		{
+			"query": sample_queries,
+			"query_embeddings": sample_query_embeddings,
+			"semantic_retrieved_ids": to_list(semantic_df.iloc[:3]["retrieved_ids"]),
+			"lexical_retrieved_ids": to_list(lexical_df.iloc[:3]["retrieved_ids"]),
+			"semantic_retrieve_scores": torch.Tensor(
+				to_list(semantic_df.iloc[:3]["retrieve_scores"])
+			),
+			"lexical_retrieve_scores": torch.Tensor(
+				to_list(lexical_df.iloc[:3]["retrieve_scores"])
+			),
+		}
 	)
 	assert "ids" in result.keys()
 	assert "scores" in result.keys()

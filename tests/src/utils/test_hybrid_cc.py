@@ -33,20 +33,25 @@ def test_normalize_tmm_torch_():
 def test_hybrid_cc():
 	# Test with sample inputs
 	weights = torch.tensor([0.3, 0.7])
-	semantic_scores = torch.tensor([[2.0, 4.0], [1.0, 3.0]])
-	# normalize => [[0.6, 1.0], [0.4, 0.8]]
-	lexical_scores = torch.tensor([[1.0, 4.0], [2.0, 5.0]])
-	# normalize => [[0.2, 0.8], [0.4, 1.0]]
+	semantic_scores = [torch.tensor([2.0, 4.0]), torch.Tensor([1.0, 3.0])]
+	# normalize => [[0.6, 1.0], [0.5, 1.0]]
+	lexical_scores = [torch.tensor([1.0, 4.0]), torch.Tensor([5.0, 2.0])]
+	# normalize => [[0.25, 1.0], [1.0, 0.4]]
 
 	result = hybrid_cc(weights, semantic_scores, lexical_scores)
-	expected = torch.Tensor([[0.32, 0.86], [0.4, 0.86]])
-	assert torch.allclose(
-		result, expected
+	expected = [torch.Tensor([0.355, 1.0]), torch.Tensor([0.35 + 0.3, 0.7 + 0.12])]
+	assert all(
+		torch.allclose(res, exp) for res, exp in zip(result, expected)
 	), "hybrid_cc did not compute the expected weighted sum"
 
 	# Test with different weights
 	weights2 = torch.tensor([0.9, 0.1])
 	result2 = hybrid_cc(weights2, semantic_scores, lexical_scores)
-	expected2 = torch.Tensor([[0.56, 0.98], [0.4, 0.98]])
+	expected2 = [
+		torch.Tensor([0.54 + 0.025, 1.0]),
+		torch.Tensor([0.05 + 0.9, 0.1 + 0.36]),
+	]
 
-	assert torch.allclose(result2, expected2), "hybrid_cc failed with different weights"
+	assert all(
+		torch.allclose(res, exp) for res, exp in zip(result2, expected2)
+	), "hybrid_cc did not compute the expected weighted sum"

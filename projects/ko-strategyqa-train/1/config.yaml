@@ -1,0 +1,21 @@
+vectordb:
+  - name: kure
+    db_type: chroma
+    client_type: persistent
+    path: ${PROJECT_DIR}/resources/chroma
+    embedding_model:
+      - type: huggingface
+        model_name: nlpai-lab/KURE-v1
+    collection_name: kure
+node_lines:
+- node_line_name: retrieve_node_line
+  nodes:
+    - node_type: retrieval
+      strategy:
+        metrics: [ retrieval_f1 ]
+      top_k: 50
+      modules:
+        - module_type: bm25
+          bm25_tokenizer: ko_kiwi
+        - module_type: vectordb
+          vectordb: kure

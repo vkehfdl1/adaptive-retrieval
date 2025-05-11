@@ -115,7 +115,7 @@ class MfarTrainingModule(pl.LightningModule):
 				sample_limit=self.top_k, temperature=self.temperature
 			)
 			loss = contrastive_loss(cc_result_ids, cc_result_scores, retrieval_gt)
-		self.log("val/loss", loss.item())
+		self.log("val_loss", loss.item())
 
 		@evaluate_retrieval(
 			metric_inputs=list(

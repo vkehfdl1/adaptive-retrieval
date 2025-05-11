@@ -1,0 +1,3 @@
+filename,module_name,module_params,execution_time,retrieval_f1,is_best
+0.parquet,VectorDB,"{'top_k': 50, 'vectordb': 'kure'}",0.07430373430252075,0.1168820501411028,True
+1.parquet,BM25,"{'top_k': 50, 'bm25_tokenizer': 'ko_kiwi'}",0.9830816427866618,0.08967963247788019,False

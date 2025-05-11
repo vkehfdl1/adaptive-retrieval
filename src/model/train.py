@@ -5,8 +5,10 @@ from typing import List, Optional
 import click
 import pytorch_lightning as pl
 import torch
+from autorag.evaluation import evaluate_retrieval
 from autorag.nodes.retrieval import BM25
 from autorag.nodes.retrieval.hybrid_cc import fuse_per_query
+from autorag.schema.metricinput import MetricInput
 from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities.types import OptimizerLRScheduler
@@ -117,14 +119,43 @@ class MfarTrainingModule(pl.LightningModule):
 
 		return {
 			"loss": loss,
-			"pred": cc_result_ids,
+			"pred_ids": cc_result_ids,
+			"pred_scores": cc_result_scores,
 			"retrieval_gt": retrieval_gt,
 		}
 
 	def validation_epoch_end(self, validation_step_outputs):
 		# Calculate Metric
-		# TODO : Implement
-		raise NotImplementedError
+		@evaluate_retrieval(
+			metric_inputs=list(
+				map(
+					lambda x: MetricInput(retrieval_gt=x),
+					validation_step_outputs["retrieval_gt"],
+				)
+			),
+			metrics=[
+				"retrieval_f1",
+				"retrieval_recall",
+				"retrieval_precision",
+				"retrieval_ndcg",
+				"retrieval_map",
+				"retrieval_mrr",
+			],
+		)
+		def calculate_metrics():
+			return (
+				[],
+				validation_step_outputs["pred_ids"],
+				validation_step_outputs["pred_scores"],
+			)
+
+		evaluate_result = calculate_metrics()
+		self.log("f1", evaluate_result["retrieval_f1"].mean())
+		self.log("recall", evaluate_result["retrieval_recall"].mean())
+		self.log("precision", evaluate_result["retrieval_precision"].mean())
+		self.log("ndcg", evaluate_result["retrieval_ndcg"].mean())
+		self.log("map", evaluate_result["retrieval_map"].mean())
+		self.log("mrr", evaluate_result["retrieval_mrr"].mean())
 
 	def hybrid_cc_weights(
 		self,

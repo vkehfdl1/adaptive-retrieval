@@ -307,7 +307,6 @@ def main(
 		filename="{epoch:02d}-{step}-{val_loss:.2f}",
 		save_last=True,
 		every_n_epochs=1,
-		every_n_train_steps=50,
 	)
 	wandb_logger = WandbLogger(name=str(datetime.now()), project="adaptive-retrieval")
 

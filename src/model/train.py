@@ -1,4 +1,5 @@
 import itertools
+from datetime import datetime
 from typing import List, Optional
 
 import click
@@ -81,9 +82,7 @@ class MfarTrainingModule(pl.LightningModule):
 		)
 
 		with torch.no_grad():
-			embedding_list = (
-				self.vectordb_retrieval.embedding_model._get_text_embeddings(queries)
-			)
+			embedding_list = self.vectordb_retrieval.embedding_model._embed(queries)
 		predicted_weight = self.layer(torch.Tensor(embedding_list))
 		cc_result_ids, cc_result_scores = self.hybrid_cc_weights(
 			predicted_weight, semantic_ids, lexical_ids, semantic_scores, lexical_scores
@@ -95,6 +94,40 @@ class MfarTrainingModule(pl.LightningModule):
 		loss = contrastive_loss(cc_result_ids, cc_result_scores, retrieval_gt)
 		self.log("train/loss", loss.item())
 		return loss
+
+	def validation_step(self, batch, batch_idx):
+		queries = batch["query"]
+		retrieval_gt = batch["retrieval_gt"]
+		semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
+			queries, retrieval_gt=retrieval_gt
+		)
+
+		with torch.no_grad():
+			embedding_list = self.vectordb_retrieval.embedding_model._embed(queries)
+			predicted_weight = self.layer(torch.Tensor(embedding_list))
+			cc_result_ids, cc_result_scores = self.hybrid_cc_weights(
+				predicted_weight,
+				semantic_ids,
+				lexical_ids,
+				semantic_scores,
+				lexical_scores,
+			)
+			contrastive_loss = ContrastiveLoss(
+				sample_limit=self.top_k, temperature=self.temperature
+			)
+			loss = contrastive_loss(cc_result_ids, cc_result_scores, retrieval_gt)
+		self.log("val/loss", loss.item())
+
+		return {
+			"loss": loss,
+			"pred": cc_result_ids,
+			"retrieval_gt": retrieval_gt,
+		}
+
+	def validation_epoch_end(self, validation_step_outputs):
+		# Calculate Metric
+		# TODO : Implement
+		raise NotImplementedError
 
 	def hybrid_cc_weights(
 		self,
@@ -221,14 +254,14 @@ def main(
 		filename="{epoch:02d}-{val_loss:.2f}",
 		save_last=True,
 	)
-	wandb_logger = WandbLogger(name="first_train", project="adaptive-retrieval")
+	wandb_logger = WandbLogger(name=str(datetime.now()), project="adaptive-retrieval")
 
 	early_stop_callback = EarlyStopping(
 		monitor="val_loss", min_delta=0.00, patience=3, verbose=False, mode="min"
 	)
 
 	trainer = pl.Trainer(
-		accelerator="cpu",
+		accelerator="auto",
 		max_epochs=10,
 		log_every_n_steps=8,
 		logger=wandb_logger,

@@ -275,7 +275,7 @@ def main(
 	checkpoint_path: str,
 ):
 	train_module = MfarTrainingModule(project_dir, chroma_path, temperature=0.7)
-	data_module = MfarDataModule(train_data_path, test_data_path, num_workers=9)
+	data_module = MfarDataModule(train_data_path, test_data_path, num_workers=6)
 
 	tqdm_cb = TQDMProgressBar(refresh_rate=10)
 	ckpt_cb = ModelCheckpoint(

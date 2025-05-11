@@ -2,6 +2,7 @@ import itertools
 from pathlib import Path
 
 import pandas as pd
+import torch
 
 from src.model.train import MfarTrainingModule
 
@@ -11,13 +12,20 @@ project_dir = root_dir / "projects" / "allganize"
 
 
 def test_training_module_retrieve():
-	training_module = MfarTrainingModule(str(project_dir))
-	qa_df = pd.read_parquet(project_dir / "data" / "qa.parquet", engine="pyarrow")
+	training_module = MfarTrainingModule(
+		str(project_dir), str(project_dir / "resources" / "chroma")
+	)
+	qa_df = pd.read_parquet(
+		root_dir / "data" / "allganize" / "qa_embeddings.parquet", engine="pyarrow"
+	)
 	input_queries = qa_df["query"].iloc[:5].tolist()
 	input_retrieval_gt = qa_df["retrieval_gt"].iloc[:5].tolist()
+	input_query_embeddings = qa_df["query_embeddings"].iloc[:5].tolist()
 
 	semantic_ids, lexical_ids, semantic_scores, lexical_scores = (
-		training_module.retrieve(input_queries, input_retrieval_gt)
+		training_module.retrieve(
+			input_queries, input_query_embeddings, input_retrieval_gt
+		)
 	)
 
 	assert (
@@ -41,13 +49,18 @@ def test_training_module_retrieve():
 
 
 def test_training_module_forward():
-	training_module = MfarTrainingModule(str(project_dir))
+	training_module = MfarTrainingModule(
+		str(project_dir), str(project_dir / "resources" / "chroma")
+	)
 	sample_queries = [
 		"최강 삼성 히어로 누구 김영웅!",
 		"중대 기계 재학생 누구 노동건!",
 		"동굴형 동굴형! 두산의! 동굴형!",
 	]
-	result = training_module(sample_queries)
+	sample_query_embeddings = torch.rand((3, 1024))
+	result = training_module(
+		{"query": sample_queries, "query_embeddings": sample_query_embeddings}
+	)
 	assert "ids" in result.keys()
 	assert "scores" in result.keys()
 	assert len(result["ids"]) == len(sample_queries) == len(result["scores"])

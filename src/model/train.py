@@ -5,7 +5,7 @@ from typing import List, Optional
 import click
 import pytorch_lightning as pl
 import torch
-from autorag.nodes.retrieval import VectorDB, BM25
+from autorag.nodes.retrieval import BM25
 from autorag.nodes.retrieval.hybrid_cc import fuse_per_query
 from pytorch_lightning.callbacks import TQDMProgressBar, ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
@@ -14,6 +14,7 @@ from pytorch_lightning.utilities.types import OptimizerLRScheduler
 from src.data.mfar import MfarDataModule
 from src.model.losses import ContrastiveLoss
 from src.model.models import LinearWeights
+from src.utils.chroma import ChromaOnlyEmbeddings
 
 
 def get_non_duplicate_ids(target_ids, compare_ids) -> List[List[str]]:
@@ -34,13 +35,14 @@ class MfarTrainingModule(pl.LightningModule):
 	def __init__(
 		self,
 		project_dir: str,
-		vectordb_name: str = "kure",
+		chroma_path: str,
+		collection_name: str = "kure",
 		top_k: int = 20,
 		temperature: float = 1.0,
 		lr: float = 1e-3,
 	):
 		super().__init__()
-		self.vectordb_retrieval = VectorDB(project_dir, vectordb_name)
+		self.chroma_retrieval = ChromaOnlyEmbeddings(chroma_path, collection_name)
 		self.bm25_retrieval = BM25(project_dir, bm25_tokenizer="ko_kiwi")
 		self.embedding_dimension = 1024
 		self.top_k = top_k
@@ -53,14 +55,12 @@ class MfarTrainingModule(pl.LightningModule):
 		# Input x: [Batch] (string list)
 		# Inference
 		with torch.no_grad():
-			embedding_list = (
-				self.vectordb_retrieval.embedding_model._get_text_embeddings(x)
-			)
-			predicted_weight: torch.Tensor = self.layer(torch.Tensor(embedding_list))
+			embedding_list = x["query_embeddings"]
+			predicted_weight: torch.Tensor = self.layer(embedding_list)
 
 			# Execute Hybrid CC
 			semantic_ids, lexical_ids, semantic_scores, lexical_scores = self.retrieve(
-				x, retrieval_gt=None
+				x["query"], x["query_embeddings"].tolist(), retrieval_gt=None
 			)
 			result_ids, result_scores = self.hybrid_cc_weights(
 				predicted_weight,
@@ -81,8 +81,6 @@ class MfarTrainingModule(pl.LightningModule):
 			queries, retrieval_gt=retrieval_gt
 		)
 
-		with torch.no_grad():
-			embedding_list = self.vectordb_retrieval.embedding_model._embed(queries)
 		predicted_weight = self.layer(torch.Tensor(embedding_list))
 		cc_result_ids, cc_result_scores = self.hybrid_cc_weights(
 			predicted_weight, semantic_ids, lexical_ids, semantic_scores, lexical_scores
@@ -103,7 +101,6 @@ class MfarTrainingModule(pl.LightningModule):
 		)
 
 		with torch.no_grad():
-			embedding_list = self.vectordb_retrieval.embedding_model._embed(queries)
 			predicted_weight = self.layer(torch.Tensor(embedding_list))
 			cc_result_ids, cc_result_scores = self.hybrid_cc_weights(
 				predicted_weight,
@@ -160,12 +157,17 @@ class MfarTrainingModule(pl.LightningModule):
 		)
 		return [optimizer]
 
-	def retrieve(self, queries: List[str], retrieval_gt: Optional[List[List]] = None):
+	def retrieve(
+		self,
+		queries: List[str],
+		query_embeddings: List[List[float]],
+		retrieval_gt: Optional[List[List]] = None,
+	):
 		"""The result can be `unsorted`."""
 		# Several input batch
 		input_queries = list(map(lambda x: [x], queries))
-		semantic_ids, semantic_scores = self.vectordb_retrieval._pure(
-			input_queries, self.top_k
+		semantic_ids, semantic_scores = self.chroma_retrieval.query(
+			query_embeddings, self.top_k
 		)
 		lexical_ids, lexical_scores = self.bm25_retrieval._pure(
 			input_queries, self.top_k
@@ -174,8 +176,8 @@ class MfarTrainingModule(pl.LightningModule):
 		lexical_target_ids = get_non_duplicate_ids(lexical_ids, semantic_ids)
 		semantic_target_ids = get_non_duplicate_ids(semantic_ids, lexical_ids)
 
-		new_semantic_ids, new_semantic_scores = self.vectordb_retrieval._pure(
-			input_queries, self.top_k, ids=semantic_target_ids
+		new_semantic_ids, new_semantic_scores = self.chroma_retrieval.get_ids_scores(
+			query_embeddings, semantic_target_ids
 		)
 		new_lexical_ids, new_lexical_scores = self.bm25_retrieval._pure(
 			input_queries, self.top_k, ids=lexical_target_ids
@@ -205,8 +207,8 @@ class MfarTrainingModule(pl.LightningModule):
 				if len(set(retrieval_gt[idx]) & set(output_semantic_scores[idx])) < 1:
 					positive_id = retrieval_gt[idx][0]
 					positive_id_list, positive_score_list = (
-						self.vectordb_retrieval._pure(
-							[input_queries[idx]], self.top_k, ids=[[positive_id]]
+						self.chroma_retrieval.get_ids_scores(
+							[query_embeddings[idx]], [[positive_id]]
 						)
 					)
 					output_semantic_ids[idx].append(positive_id_list[0][0])

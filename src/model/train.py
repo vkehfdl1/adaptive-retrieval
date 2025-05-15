@@ -174,7 +174,7 @@ class MfarTrainingModule(pl.LightningModule):
 
 	def configure_optimizers(self) -> OptimizerLRScheduler:
 		optimizer = torch.optim.Adam(
-			self.layer.parameters(), self.lr, betas=(0.9, 0.999)
+			self.layer.parameters(), self.lr, betas=(0.8, 0.999)
 		)
 		return [optimizer]
 

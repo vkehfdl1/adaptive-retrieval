@@ -61,10 +61,20 @@ class UpperBoundFinder:
 				torch.tensor([t.item() for t in contrastive_loss_list])
 			).item()
 
+			# Sort
+			best_scores = cc_scores[best_weight_idx].tolist()
+			result = [
+				(_id, score)
+				for _id, score in sorted(
+					zip(cc_ids[0], best_scores), key=lambda pair: pair[1], reverse=True
+				)
+			]
+			id_result, score_result = zip(*result)
+			id_result = list(id_result)
+			score_result = list(score_result)
+
 			# Evaluate the best weight
-			metric_df = calc_metrics(
-				[retrieval_gt], cc_ids, [cc_scores[best_weight_idx].tolist()]
-			)
+			metric_df = calc_metrics([retrieval_gt], [id_result], [score_result])
 
 			metric_dict = {
 				"f1": metric_df["retrieval_f1"].mean(),

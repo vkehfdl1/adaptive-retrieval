@@ -53,13 +53,34 @@ class UpperBoundFinder:
 				[semantic_score_tensor[0] for _ in range(101)],
 				[lexical_score_tensor[0] for _ in range(101)],
 			)
-			contrastive_loss_list = [
-				self.loss(cc_ids, [cc_score.tolist()], [retrieval_gt])
-				for cc_score in cc_scores
-			]
-			best_weight_idx = torch.argmin(
-				torch.tensor([t.item() for t in contrastive_loss_list])
-			).item()
+
+			best_weight_idx = -1
+			optimal_ndcg = 0
+			# sorting each tensors
+			for idx, cc_score_tensor in enumerate(cc_scores):
+				cc_score = cc_score_tensor.tolist()
+				result = [
+					(_id, score)
+					for _id, score in sorted(
+						zip(cc_ids[0], cc_score), key=lambda pair: pair[1], reverse=True
+					)
+				]
+				id_result, score_result = zip(*result)
+				id_result = list(id_result)
+				score_result = list(score_result)
+
+				ndcg = calc_ndcg([retrieval_gt], [id_result], [score_result])
+				if ndcg > optimal_ndcg:
+					optimal_ndcg = ndcg
+					best_weight_idx = idx
+
+			# contrastive_loss_list = [
+			# 	self.loss(cc_ids, [cc_score.tolist()], [retrieval_gt])
+			# 	for cc_score in cc_scores
+			# ]
+			# best_weight_idx = torch.argmin(
+			# 	torch.tensor([t.item() for t in contrastive_loss_list])
+			# ).item()
 
 			# Sort
 			best_scores = cc_scores[best_weight_idx].tolist()
@@ -84,7 +105,7 @@ class UpperBoundFinder:
 				"map": metric_df["retrieval_map"].mean(),
 				"mrr": metric_df["retrieval_mrr"].mean(),
 			}
-			metric_dict["loss"] = contrastive_loss_list[best_weight_idx].item()
+			# metric_dict["loss"] = contrastive_loss_list[best_weight_idx].item()
 			metric_dict["best_weight"] = best_weight_idx / 100.0
 			metric_dict["query"] = batch["query"]
 			metric_dict["retireval_gt"] = retrieval_gt
@@ -171,3 +192,23 @@ def calc_metrics(retrieval_gt, id_result, score_result):
 		)
 
 	return calculate_metrics()
+
+
+def calc_ndcg(retrieval_gt, id_result, score_result):
+	@evaluate_retrieval(
+		metric_inputs=list(
+			map(
+				lambda x: MetricInput(retrieval_gt=x),
+				retrieval_gt,
+			)
+		),
+		metrics=["retrieval_ndcg"],
+	)
+	def calculate_metrics():
+		return (
+			["" for _ in range(len(id_result))],
+			id_result,
+			score_result,
+		)
+
+	return calculate_metrics()["retrieval_ndcg"].mean()

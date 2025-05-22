@@ -66,8 +66,8 @@ class UpperBoundFinder:
 					)
 				]
 				id_result, score_result = zip(*result)
-				id_result = list(id_result)
-				score_result = list(score_result)
+				id_result = list(id_result)[: self.top_k]
+				score_result = list(score_result)[: self.top_k]
 
 				ndcg = calc_ndcg([retrieval_gt], [id_result], [score_result])
 				if ndcg > optimal_ndcg:
@@ -91,8 +91,8 @@ class UpperBoundFinder:
 				)
 			]
 			id_result, score_result = zip(*result)
-			id_result = list(id_result)
-			score_result = list(score_result)
+			id_result = list(id_result)[: self.top_k]
+			score_result = list(score_result)[: self.top_k]
 
 			# Evaluate the best weight
 			metric_df = calc_metrics([retrieval_gt], [id_result], [score_result])

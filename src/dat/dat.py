@@ -18,4 +18,14 @@ class DAT:
 		response = response.text.strip().split(" ")
 		assert len(response) == 2, "The llm response have to have two elements"
 
-		return int(response[0]), int(response[1])  # vector result, bm25 result
+		vector_score = int(response[0])
+		bm25_score = int(response[1])
+
+		if vector_score == 5 and bm25_score == 5:
+			return 0.5
+		elif vector_score == 5 and bm25_score != 5:
+			return 1.0
+		elif vector_score != 5 and bm25_score == 5:
+			return 0.0
+		else:
+			return vector_score / (vector_score + bm25_score)

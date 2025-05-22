@@ -14,12 +14,11 @@ async def test_dat(dat_instance):
 	first_reference = "NomaDamas is Great Team"
 	second_reference = "Paris is the capital of France."
 
-	vector_score, bm25_score = await dat_instance.calculate_score(
+	score = await dat_instance.calculate_score(
 		question,
 		first_reference,
 		second_reference,
 	)
 
-	assert isinstance(vector_score, int)
-	assert isinstance(bm25_score, int)
-	assert vector_score < bm25_score
+	assert isinstance(score, float)
+	assert score == 0.0

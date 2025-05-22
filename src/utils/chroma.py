@@ -38,6 +38,10 @@ class ChromaOnlyEmbeddings:
 		fetch_result = self.collection.get(ids, include=[IncludeEnum.embeddings])
 		return to_list(fetch_result["embeddings"])
 
+	def fetch_contents(self, ids: List[str]) -> List[str]:
+		fetch_result = self.collection.get(ids, include=[IncludeEnum.documents])
+		return to_list(fetch_result["documents"])
+
 	def get_ids_scores(self, query_embeddings: List[List[float]], ids: List[List[str]]):
 		if len(ids) < 1:
 			return [], []

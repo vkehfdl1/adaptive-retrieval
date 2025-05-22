@@ -27,5 +27,7 @@ class DAT:
 			return 1.0
 		elif vector_score != 5 and bm25_score == 5:
 			return 0.0
+		elif vector_score == 0 and bm25_score == 0:
+			return 0.5
 		else:
 			return vector_score / (vector_score + bm25_score)

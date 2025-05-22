@@ -1,5 +1,7 @@
 import asyncio
+import os
 
+import pandas as pd
 import torch
 from autorag.nodes.retrieval import BM25
 from autorag.utils.util import process_batch
@@ -25,6 +27,9 @@ class DATBenchmark:
 		self.bm25_retrieval = BM25(project_dir, bm25_tokenizer="ko_kiwi")
 		self.top_k = top_k
 		self.dat = DAT()
+		self.corpus_df = pd.read_parquet(
+			os.path.join(project_dir, "data", "corpus.parquet")
+		)
 
 	def run(self, save_path: str):
 		if not save_path.endswith(".parquet"):
@@ -33,15 +38,21 @@ class DATBenchmark:
 		tasks = [self.__run(self.dataset[idx]) for idx in range(len(self.dataset))]
 		loop = asyncio.get_event_loop()
 		dat_results = loop.run_until_complete(process_batch(tasks, batch_size=16))
+		df = pd.DataFrame(
+			{
+				"weight": dat_results,
+			}
+		)
+		df.to_parquet(save_path, index=False)
 
 		metric_df = calc_metrics(
 			self.dataset.qa_df["retrieval_gt"].tolist(),
-			list(map(lambda x: x["id_result"].tolist(), dat_results)),
-			list(map(lambda x: x["score_result"].tolist(), dat_results)),
+			list(map(lambda x: x["id_result"], dat_results)),
+			list(map(lambda x: x["score_result"], dat_results)),
 		)
-		metric_df["dat_weight"] = list(map(lambda x: x["weight"].tolist(), dat_results))
 		metric_df["query"] = self.dataset.qa_df["query"].tolist()
 		metric_df["retrieval_gt"] = self.dataset.qa_df["retrieval_gt"].tolist()
+		metric_df["dat_weight"] = list(map(lambda x: x["weight"], dat_results))
 
 		metric_df.to_parquet(save_path, index=False)
 		return metric_df
@@ -55,7 +66,7 @@ class DATBenchmark:
 		)
 		dat_weight = await self.__select_weight(batch)
 		cc_scores = hybrid_cc(
-			torch.Tensor(dat_weight),
+			torch.Tensor([dat_weight]),
 			semantic_score_tensor,
 			lexical_score_tensor,
 		)
@@ -84,9 +95,14 @@ class DATBenchmark:
 		best_semantic_id = batch["semantic_retrieved_ids"][argmax_semantic_idx]
 		best_lexical_id = batch["lexical_retrieved_ids"][argmax_lexical_idx]
 
-		passages = self.chroma_retrieval.fetch_contents(
-			[best_semantic_id, best_lexical_id]
-		)
+		passages = [
+			self.corpus_df[self.corpus_df["doc_id"] == best_semantic_id].iloc[0][
+				"contents"
+			],
+			self.corpus_df[self.corpus_df["doc_id"] == best_lexical_id].iloc[0][
+				"contents"
+			],
+		]
 
 		dat_score = await self.dat.calculate_score(query, passages[0], passages[1])
 		return dat_score

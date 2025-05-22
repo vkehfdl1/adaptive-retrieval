@@ -23,6 +23,7 @@ name = "adaptive-retrieval"
 description = "Researching adaptive retrieval"
 requires-python = ">=3.10"
 dependencies = [
+    "llama-index-llms-openai>=0.3.42",
     "chromadb==0.5.15",
     "autorag[gpu]>=0.3.13",
     "click>=8.1.8",
@@ -38,6 +39,8 @@ dependencies = [
     "tqdm>=4.67.1",
     "pytorch-lightning>=2.5.1.post0",
     "wandb>=0.19.11",
+    "pytest-dotenv>=0.5.2",
+    "llama-index-llms-openai>=0.3.42"
 ]
 dynamic = ["version"]
 

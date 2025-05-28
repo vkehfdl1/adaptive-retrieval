@@ -4,7 +4,12 @@ import pandas as pd
 import pytest
 
 from src.data.mfar import AutoRAGQADataset
-from src.distmix.run import sigma_mix_base, DistMixBenchmark, reciprocal_rank_drop
+from src.distmix.run import (
+	sigma_mix_base,
+	DistMixBenchmark,
+	reciprocal_rank_drop,
+	weight_method,
+)
 
 root_dir = Path(__file__).parent.parent.parent.parent
 data_dir = root_dir / "data"
@@ -81,6 +86,16 @@ def test_reciprocal_rank_drop_multiple_rows():
 	assert reciprocal_rank_drop(input_data) == expected
 
 
+def test_weight_method_multiple_rows():
+	input_data = [
+		[10.0, 5.0, 4.0, 3.0],
+		[7.0, 6.0, 2.0, 1.0],
+		[8.0, 7.0, 6.0, 1.0],
+	]
+	expected = [15 + 2 + 1, 3 + 8 + 1, 3 + 2 + 5]
+	assert weight_method(input_data) == expected
+
+
 def test_sigma_mix_run(allganize_dataset):
 	dataset = allganize_dataset
 	project_name = "allganize"
@@ -112,4 +127,21 @@ def test_drop_rr_run(allganize_dataset):
 	)
 	distmix.run(
 		str(root_dir / f"{project_name}_distmix_drop_rr_top_k_{top_k}.parquet"),
+	)
+
+
+def test_weight_mix_run(allganize_dataset):
+	dataset = allganize_dataset
+	project_name = "allganize"
+	top_k = 20
+
+	distmix = DistMixBenchmark(
+		dataset,
+		project_dir=str(project_dir / project_name),
+		chroma_path=str(project_dir / project_name / "resources" / "chroma"),
+		top_k=20,
+		mix_mode="weight",
+	)
+	distmix.run(
+		str(root_dir / f"{project_name}_distmix_weight_top_k_{top_k}.parquet"),
 	)

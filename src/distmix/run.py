@@ -51,7 +51,8 @@ class DistMixBenchmark:
 			weights = self.rr_drop_mix(semantic_scores, lexical_scores)
 			weight_tensor = torch.Tensor(weights)
 		elif self.mix_mode == "weight":
-			raise NotImplementedError
+			weights = self.weight_mix(semantic_scores, lexical_scores)
+			weight_tensor = torch.Tensor(weights)
 		else:
 			raise ValueError(f"Unknown mix mode {self.mix_mode}")
 
@@ -121,6 +122,19 @@ class DistMixBenchmark:
 		weights = [decide_weight(a, b) for a, b in zip(semantic_rr, lexical_rr)]
 		return weights
 
+	def weight_mix(self, semantic_retrieve_scores, lexical_retrieve_scores):
+		semantic_weight_scores = weight_method(semantic_retrieve_scores)
+		lexical_weight_scores = weight_method(lexical_retrieve_scores)
+
+		def decide_weight(a, b):
+			return a / (a + b)
+
+		weights = [
+			decide_weight(a, b)
+			for a, b in zip(semantic_weight_scores, lexical_weight_scores)
+		]
+		return weights
+
 	def retrieve_non_duplicate(self):
 		semantic_ids = self.dataset.semantic_df["retrieved_ids"].tolist()
 		lexical_ids = self.dataset.lexical_df["retrieved_ids"].tolist()
@@ -188,3 +202,17 @@ def reciprocal_rank_drop(arr: List[List[float]]):
 		reciprocal_rank = 1 / (differences.index(max_difference) + 1)
 		reciprocal_ranks.append(reciprocal_rank)
 	return reciprocal_ranks
+
+
+def weight_method(arr: List[List[float]]):
+	result = []
+	for row in arr:
+		sorted_row = sorted(row, reverse=True)
+		differences = [
+			sorted_row[i] - sorted_row[i + 1] for i in range(len(sorted_row) - 1)
+		]
+		temp = 0.0
+		for idx, elem in enumerate(differences):
+			temp += (len(differences) - idx) * elem
+		result.append(temp)
+	return result

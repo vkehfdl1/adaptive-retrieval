@@ -47,6 +47,13 @@ class DistMixBenchmark:
 		if self.mix_mode == "sigma":
 			weights = self.sigma_mix(semantic_scores, lexical_scores)
 			weight_tensor = torch.Tensor(weights)
+		elif self.mix_mode == "drop_rr":
+			weights = self.rr_drop_mix(semantic_scores, lexical_scores)
+			weight_tensor = torch.Tensor(weights)
+		elif self.mix_mode == "weight":
+			raise NotImplementedError
+		else:
+			raise ValueError(f"Unknown mix mode {self.mix_mode}")
 
 		cc_scores = hybrid_cc(
 			weight_tensor, semantic_score_tensor, lexical_score_tensor
@@ -102,6 +109,16 @@ class DistMixBenchmark:
 			decide_weight(a, b)
 			for a, b in zip(important_semantic_counts, important_lexical_counts)
 		]
+		return weights
+
+	def rr_drop_mix(self, semantic_retrieve_scores, lexical_retrieve_scores):
+		semantic_rr = reciprocal_rank_drop(semantic_retrieve_scores)
+		lexical_rr = reciprocal_rank_drop(lexical_retrieve_scores)
+
+		def decide_weight(semantic_rr_score, lexical_rr_score):
+			return 0.5 + (semantic_rr_score - lexical_rr_score) / 2.0
+
+		weights = [decide_weight(a, b) for a, b in zip(semantic_rr, lexical_rr)]
 		return weights
 
 	def retrieve_non_duplicate(self):

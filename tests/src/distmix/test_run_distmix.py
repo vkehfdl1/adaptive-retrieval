@@ -96,3 +96,20 @@ def test_sigma_mix_run(allganize_dataset):
 	distmix.run(
 		str(root_dir / f"{project_name}_distmix_sigma_2.0_top_k_{top_k}.parquet"),
 	)
+
+
+def test_drop_rr_run(allganize_dataset):
+	dataset = allganize_dataset
+	project_name = "allganize"
+	top_k = 20
+
+	distmix = DistMixBenchmark(
+		dataset,
+		project_dir=str(project_dir / project_name),
+		chroma_path=str(project_dir / project_name / "resources" / "chroma"),
+		top_k=20,
+		mix_mode="drop_rr",
+	)
+	distmix.run(
+		str(root_dir / f"{project_name}_distmix_drop_rr_top_k_{top_k}.parquet"),
+	)

@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from src.data.mfar import AutoRAGQADataset
-from src.distmix.run import sigma_mix_base, DistMixBenchmark
+from src.distmix.run import sigma_mix_base, DistMixBenchmark, reciprocal_rank_drop
 
 root_dir = Path(__file__).parent.parent.parent.parent
 data_dir = root_dir / "data"
@@ -70,6 +70,17 @@ def test_sigma_mix_base():
 	), f"Expected {expected_counts}, got {actual_counts}"
 
 
+def test_reciprocal_rank_drop_multiple_rows():
+	# Test with multiple rows
+	input_data = [
+		[10.0, 5.0, 4.0, 3.0],  # max diff between first and second (5.0)
+		[7.0, 6.0, 2.0, 1.0],  # max diff between second and third (4.0)
+		[8.0, 7.0, 6.0, 1.0],  # max diff between third and fourth (5.0)
+	]
+	expected = [1.0, 0.5, 1 / 3]
+	assert reciprocal_rank_drop(input_data) == expected
+
+
 def test_sigma_mix_run(allganize_dataset):
 	dataset = allganize_dataset
 	project_name = "allganize"
@@ -80,7 +91,8 @@ def test_sigma_mix_run(allganize_dataset):
 		project_dir=str(project_dir / project_name),
 		chroma_path=str(project_dir / project_name / "resources" / "chroma"),
 		top_k=20,
+		mix_sigma_multiplier=2.0,
 	)
 	distmix.run(
-		str(root_dir / f"{project_name}_distmix_sigma_1.0_top_k_{top_k}.parquet"),
+		str(root_dir / f"{project_name}_distmix_sigma_2.0_top_k_{top_k}.parquet"),
 	)

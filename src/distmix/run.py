@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Literal
 
 import pandas as pd
 import torch
@@ -20,7 +20,7 @@ class DistMixBenchmark:
 		chroma_path: str,
 		collection_name: str = "kure",
 		top_k: int = 20,
-		mix_mode: str = "sigma",
+		mix_mode: Literal["sigma", "drop_rr", "weight"] = "sigma",
 		mix_sigma_multiplier: float = 1.0,
 	):
 		self.dataset = dataset
@@ -158,3 +158,16 @@ def sigma_mix_base(arr: List[List[float]], multiplier: float):
 
 	counts = [sum(1 for x in row if x > t) for row, t in zip(arr, threshold)]
 	return counts
+
+
+def reciprocal_rank_drop(arr: List[List[float]]):
+	reciprocal_ranks = []
+	for row in arr:
+		sorted_row = sorted(row, reverse=True)
+		differences = [
+			sorted_row[i] - sorted_row[i + 1] for i in range(len(sorted_row) - 1)
+		]
+		max_difference = max(differences)
+		reciprocal_rank = 1 / (differences.index(max_difference) + 1)
+		reciprocal_ranks.append(reciprocal_rank)
+	return reciprocal_ranks

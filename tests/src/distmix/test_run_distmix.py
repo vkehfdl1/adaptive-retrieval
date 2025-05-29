@@ -88,12 +88,12 @@ def test_reciprocal_rank_drop_multiple_rows():
 
 def test_weight_method_multiple_rows():
 	input_data = [
-		[10.0, 5.0, 4.0, 3.0],
+		[10.0, 5.0, 4.0, 3.0, 2.0],
 		[7.0, 6.0, 2.0, 1.0],
-		[8.0, 7.0, 6.0, 1.0],
+		[8.0, 7.0, 6.0, 1.0, 0.4, 0.2],
 	]
 	expected = [15 + 2 + 1, 3 + 8 + 1, 3 + 2 + 5]
-	assert weight_method(input_data) == expected
+	assert weight_method(input_data, 4) == expected
 
 
 def test_sigma_mix_run(allganize_dataset):

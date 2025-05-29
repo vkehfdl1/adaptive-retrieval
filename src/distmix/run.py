@@ -123,8 +123,40 @@ class DistMixBenchmark:
 		return weights
 
 	def weight_mix(self, semantic_retrieve_scores, lexical_retrieve_scores):
-		semantic_weight_scores = weight_method(semantic_retrieve_scores)
-		lexical_weight_scores = weight_method(lexical_retrieve_scores)
+		# Normalize each rows
+		assert (
+			len(semantic_retrieve_scores) == len(lexical_retrieve_scores)
+		), "The semantic retrieve scores and lexical retrieve scores must have the same length"
+
+		# At first normalize two scores separately
+
+		normalized_semantic_retrieve_scores, normalized_lexical_retrieve_scores = [], []
+		for semantic_scores, lexical_scores in zip(
+			semantic_retrieve_scores, lexical_retrieve_scores
+		):
+			norm_semantic_scores = list(
+				map(
+					lambda x: (x - min(semantic_scores))
+					/ (max(semantic_scores) - min(semantic_scores)),
+					semantic_scores,
+				)
+			)
+			norm_lexical_scores = list(
+				map(
+					lambda x: (x - min(lexical_scores))
+					/ (max(lexical_scores) - min(lexical_scores)),
+					lexical_scores,
+				)
+			)
+			normalized_semantic_retrieve_scores.append(norm_semantic_scores)
+			normalized_lexical_retrieve_scores.append(norm_lexical_scores)
+
+		semantic_weight_scores = weight_method(
+			normalized_semantic_retrieve_scores, self.top_k
+		)
+		lexical_weight_scores = weight_method(
+			normalized_lexical_retrieve_scores, self.top_k
+		)
 
 		def decide_weight(a, b):
 			return a / (a + b)
@@ -204,10 +236,12 @@ def reciprocal_rank_drop(arr: List[List[float]]):
 	return reciprocal_ranks
 
 
-def weight_method(arr: List[List[float]]):
+def weight_method(arr: List[List[float]], top_k: int):
+	# It is normalized by row already before put in here
 	result = []
 	for row in arr:
-		sorted_row = sorted(row, reverse=True)
+		sorted_row = list(sorted(row, reverse=True))
+		sorted_row = sorted_row[:top_k]
 		differences = [
 			sorted_row[i] - sorted_row[i + 1] for i in range(len(sorted_row) - 1)
 		]

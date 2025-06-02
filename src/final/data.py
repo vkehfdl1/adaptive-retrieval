@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import torch
 from autorag.utils.util import to_list
@@ -36,10 +37,14 @@ class UpperBoundDataset(Dataset):
 				self.qa_embedding_df.iloc[idx]["query_embeddings"].copy()
 			).float(),
 			"semantic_retrieve_scores": torch.from_numpy(
-				self.semantic_retrieval_df.iloc[idx]["retrieve_scores"].copy()
+				np.sort(self.semantic_retrieval_df.iloc[idx]["retrieve_scores"].copy())[
+					::-1
+				]
 			).float(),
 			"lexical_retrieve_scores": torch.from_numpy(
-				self.lexical_retrieval_df.iloc[idx]["retrieve_scores"].copy()
+				np.sort(self.lexical_retrieval_df.iloc[idx]["retrieve_scores"].copy())[
+					::-1
+				]
 			).float(),
 			"gt_weight": torch.tensor(self.upper_bound_df.iloc[idx]["best_weight"]),
 		}

@@ -21,7 +21,7 @@ def use_only_score_dist(
 			lambda x: x[idx]
 		)
 		X[f"{idx}_lexical_score"] = lexical_retrieval_df["retrieve_scores"].apply(
-			lambda x: x[idx]
+			lambda x: x[idx] / 100.0  # normalize
 		)
 
 	y = upper_bound_df["best_weight"]
@@ -70,7 +70,7 @@ def use_score_dist_classify(
 			lambda x: x[idx]
 		)
 		X[f"{idx}_lexical_score"] = lexical_retrieval_df["retrieve_scores"].apply(
-			lambda x: x[idx]
+			lambda x: x[idx] / 100.0  # normalize
 		)
 
 	y = (upper_bound_df["best_weight"] > 0.5).astype(int)

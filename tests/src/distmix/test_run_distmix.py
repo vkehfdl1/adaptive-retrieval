@@ -96,33 +96,33 @@ def test_weight_method_multiple_rows():
 	assert weight_method(input_data, 4) == expected
 
 
-def test_sigma_mix_run(allganize_dataset):
-	dataset = allganize_dataset
-	project_name = "allganize"
-	top_k = 20
+def test_sigma_mix_run(ko_strategyqa_dev_dataset):
+	dataset = ko_strategyqa_dev_dataset
+	project_name = "ko-strategyqa-dev"
+	top_k = 50
 
 	distmix = DistMixBenchmark(
 		dataset,
 		project_dir=str(project_dir / project_name),
 		chroma_path=str(project_dir / project_name / "resources" / "chroma"),
-		top_k=20,
-		mix_sigma_multiplier=2.0,
+		top_k=top_k,
+		mix_sigma_multiplier=1.0,
 	)
 	distmix.run(
-		str(root_dir / f"{project_name}_distmix_sigma_2.0_top_k_{top_k}.parquet"),
+		str(root_dir / f"{project_name}_distmix_sigma_1.0_top_k_{top_k}.parquet"),
 	)
 
 
-def test_drop_rr_run(allganize_dataset):
-	dataset = allganize_dataset
-	project_name = "allganize"
-	top_k = 20
+def test_drop_rr_run(ko_strategyqa_dev_dataset):
+	dataset = ko_strategyqa_dev_dataset
+	project_name = "ko-strategyqa-dev"
+	top_k = 50
 
 	distmix = DistMixBenchmark(
 		dataset,
 		project_dir=str(project_dir / project_name),
 		chroma_path=str(project_dir / project_name / "resources" / "chroma"),
-		top_k=20,
+		top_k=top_k,
 		mix_mode="drop_rr",
 	)
 	distmix.run(
@@ -130,16 +130,16 @@ def test_drop_rr_run(allganize_dataset):
 	)
 
 
-def test_weight_mix_run(allganize_dataset):
-	dataset = allganize_dataset
-	project_name = "allganize"
-	top_k = 20
+def test_weight_mix_run(ko_strategyqa_dev_dataset):
+	dataset = ko_strategyqa_dev_dataset
+	project_name = "ko-strategyqa-dev"
+	top_k = 50
 
 	distmix = DistMixBenchmark(
 		dataset,
 		project_dir=str(project_dir / project_name),
 		chroma_path=str(project_dir / project_name / "resources" / "chroma"),
-		top_k=20,
+		top_k=top_k,
 		mix_mode="weight",
 	)
 	distmix.run(

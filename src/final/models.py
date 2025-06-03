@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
@@ -8,9 +10,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 class MLPRegression(pl.LightningModule):
 	def __init__(
 		self,
-		input_dim,
 		embedding_dim,
-		latent_dim: int = 128,
+		latent_dim: Tuple[int] = (512, 128),
 		use_score_distribution: bool = False,
 		distribution_k: int = 0,
 		output_dim=1,
@@ -25,9 +26,9 @@ class MLPRegression(pl.LightningModule):
 		self.distribution_k = distribution_k
 
 		layers = []
-		prev_dim = input_dim
+		prev_dim = embedding_dim + distribution_k + distribution_k
 
-		for hidden_dim in (embedding_dim + distribution_k + distribution_k, latent_dim):
+		for hidden_dim in latent_dim:
 			layers.extend([nn.Linear(prev_dim, hidden_dim), nn.ReLU(), nn.Dropout(0.1)])
 			prev_dim = hidden_dim
 
@@ -39,7 +40,7 @@ class MLPRegression(pl.LightningModule):
 		return self.model(x)
 
 	def training_step(self, batch, batch_idx):
-		query_embedding = batch["query_embedding"]  # (B, E)
+		query_embedding = batch["query_embeddings"]  # (B, E)
 		semantic_scores = batch["semantic_retrieve_scores"][
 			:, : self.distribution_k
 		]  # (B, top-k)
@@ -55,13 +56,14 @@ class MLPRegression(pl.LightningModule):
 			input_tensor = query_embedding
 
 		y_hat = self.forward(input_tensor)
+		y_hat = y_hat.squeeze()
 		y = batch["gt_weight"]
 		loss = self.loss_fn(y_hat, y)
 		self.log("train_loss", loss)
 		return loss
 
 	def validation_step(self, batch, batch_idx):
-		query_embedding = batch["query_embedding"]  # (B, E)
+		query_embedding = batch["query_embeddings"]  # (B, E)
 		semantic_scores = batch["semantic_retrieve_scores"][
 			:, : self.distribution_k
 		]  # (B, top-k)
@@ -76,13 +78,14 @@ class MLPRegression(pl.LightningModule):
 		else:
 			input_tensor = query_embedding
 		y_hat = self(input_tensor)
+		y_hat = y_hat.squeeze()
 		y = batch["gt_weight"]
 		loss = self.loss_fn(y_hat, y)
 		self.log("val_loss", loss)
 		return loss
 
 	def test_step(self, batch, batch_idx):
-		query_embedding = batch["query_embedding"]  # (B, E)
+		query_embedding = batch["query_embeddings"]  # (B, E)
 		semantic_scores = batch["semantic_retrieve_scores"][
 			:, : self.distribution_k
 		]  # (B, top-k)
@@ -97,6 +100,7 @@ class MLPRegression(pl.LightningModule):
 		else:
 			input_tensor = query_embedding
 		y_hat = self(input_tensor)
+		y_hat = y_hat.squeeze()
 		y = batch["gt_weight"]
 		loss = self.loss_fn(y_hat, y)
 		self.log("test_loss", loss)

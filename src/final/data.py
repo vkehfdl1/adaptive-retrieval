@@ -32,21 +32,23 @@ class UpperBoundDataset(Dataset):
 	def __getitem__(self, idx):
 		return {
 			"query": self.upper_bound_df.iloc[idx]["query"],
-			"retrieval_gt": to_list(self.upper_bound_df.iloc[idx]["retrieval_gt"]),
+			"retrieval_gt": to_list(self.qa_embedding_df.iloc[idx]["retrieval_gt"]),
 			"query_embeddings": torch.from_numpy(
 				self.qa_embedding_df.iloc[idx]["query_embeddings"].copy()
-			).float(),
+			).type(torch.float32),
 			"semantic_retrieve_scores": torch.from_numpy(
-				np.sort(self.semantic_retrieval_df.iloc[idx]["retrieve_scores"].copy())[
+				np.sort(self.semantic_retrieval_df.iloc[idx]["retrieve_scores"])[
 					::-1
-				]
-			).float(),
+				].copy()
+			).type(torch.float32),
 			"lexical_retrieve_scores": torch.from_numpy(
-				np.sort(self.lexical_retrieval_df.iloc[idx]["retrieve_scores"].copy())[
+				np.sort(self.lexical_retrieval_df.iloc[idx]["retrieve_scores"])[
 					::-1
-				]
-			).float(),
-			"gt_weight": torch.tensor(self.upper_bound_df.iloc[idx]["best_weight"]),
+				].copy()
+			).type(torch.float32),
+			"gt_weight": torch.tensor(
+				self.upper_bound_df.iloc[idx]["best_weight"], dtype=torch.float32
+			),
 		}
 
 

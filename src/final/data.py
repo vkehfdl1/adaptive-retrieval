@@ -49,6 +49,10 @@ class UpperBoundDataset(Dataset):
 			"gt_weight": torch.tensor(
 				self.upper_bound_df.iloc[idx]["best_weight"], dtype=torch.float32
 			),
+			"gt_label": torch.tensor(
+				(self.upper_bound_df.iloc[idx]["best_weight"] > 0.5).astype(float),
+				dtype=torch.float32,
+			),
 		}
 
 

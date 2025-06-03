@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 import click
 import pytorch_lightning as pl
@@ -6,7 +7,7 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, TQDMProg
 from pytorch_lightning.loggers import WandbLogger
 
 from src.final.data import UpperBoundDataModule
-from src.final.models import MLPRegression
+from src.final.models import MLPRegression, MLPClassifier
 
 
 def main(
@@ -19,8 +20,12 @@ def main(
 	lexical_retrieval_df_test_path,
 	upper_bound_df_test_path,
 	checkpoint_path: str,
+	mode: Literal["classification", "regression"],
 ):
-	train_module = MLPRegression(1024)  # Without score distribution
+	if mode == "classification":
+		train_module = MLPClassifier(1024)
+	elif mode == "regression":
+		train_module = MLPRegression(1024)  # Without score distribution
 	data_module = UpperBoundDataModule(
 		qa_embedding_df_train_path,
 		semantic_retrieval_df_train_path,
@@ -113,6 +118,11 @@ def main(
 	required=True,
 	help="Directory to save model checkpoints",
 )
+@click.option(
+	"--mode",
+	type=click.Choice(["classification", "regression"]),
+	default="classification",
+)
 def cli(
 	qa_embedding_df_train_path,
 	semantic_retrieval_df_train_path,
@@ -123,6 +133,7 @@ def cli(
 	lexical_retrieval_df_test_path,
 	upper_bound_df_test_path,
 	checkpoint_path: str,
+	mode,
 ):
 	main(
 		qa_embedding_df_train_path,
@@ -134,6 +145,7 @@ def cli(
 		lexical_retrieval_df_test_path,
 		upper_bound_df_test_path,
 		checkpoint_path,
+		mode,
 	)
 
 

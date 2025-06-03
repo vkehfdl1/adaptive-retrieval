@@ -1,6 +1,7 @@
 # I have to test the result of the model
 import os
 import pathlib
+from typing import Literal
 
 import click
 import pandas as pd
@@ -10,7 +11,7 @@ from autorag.utils.util import to_list
 from tqdm import tqdm
 
 from src.data.mfar import AutoRAGQADataset
-from src.final.models import MLPRegression
+from src.final.models import MLPRegression, MLPClassifier
 from src.upper_bound.run import get_non_duplicate_ids, calc_metrics
 from src.utils.chroma import ChromaOnlyEmbeddings
 from src.utils.hybrid_cc import sort_list_to_cc, hybrid_cc
@@ -134,8 +135,12 @@ def main(
 	semantic_retrieval_df_test_path,
 	lexical_retrieval_df_test_path,
 	save_path: str,
+	mode: Literal["regression", "classification"],
 ):
-	model = MLPRegression.load_from_checkpoint(model_checkpoint_path)
+	if mode == "regression":
+		model = MLPRegression.load_from_checkpoint(model_checkpoint_path)
+	elif mode == "classification":
+		model = MLPClassifier.load_from_checkpoint(model_checkpoint_path)
 
 	project_dir = str(
 		pathlib.Path(semantic_retrieval_df_test_path).parent.parent.parent.parent
@@ -185,12 +190,19 @@ def main(
 @click.option(
 	"--save_path", type=str, required=True, help="Path to save the evaluation results"
 )
+@click.option(
+	"--mode",
+	default="classification",
+	show_default=True,
+	type=click.Choice(["regression", "classification"]),
+)
 def cli(
 	model_checkpoint_path: str,
 	qa_embedding_df_test_path,
 	semantic_retrieval_df_test_path,
 	lexical_retrieval_df_test_path,
 	save_path: str,
+	mode,
 ):
 	main(
 		model_checkpoint_path,
@@ -198,6 +210,7 @@ def cli(
 		semantic_retrieval_df_test_path,
 		lexical_retrieval_df_test_path,
 		save_path,
+		mode,
 	)
 
 

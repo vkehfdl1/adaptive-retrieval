@@ -182,3 +182,70 @@ class UpperBoundDataModule(pl.LightningDataModule):
 			batch_size=self.batch_size,
 			num_workers=self.num_workers,
 		)
+
+
+class UpperBoundDataModuleWOTest(pl.LightningDataModule):
+	def __init__(
+		self,
+		qa_embedding_df_train_path,
+		semantic_retrieval_df_train_path,
+		lexical_retrieval_df_train_path,
+		upper_bound_df_train_path,
+		batch_size: int = 32,
+		num_workers: int = 0,
+	):
+		super().__init__()
+		self.qa_embedding_df_train_path = qa_embedding_df_train_path
+		self.semantic_retrieval_df_train_path = semantic_retrieval_df_train_path
+		self.lexical_retrieval_df_train_path = lexical_retrieval_df_train_path
+		self.upper_bound_df_train_path = upper_bound_df_train_path
+		self.batch_size = batch_size
+		self.num_workers = num_workers
+
+	def setup(self, stage):
+		if stage == "fit":
+			qa_embedding_df = pd.read_parquet(
+				self.qa_embedding_df_train_path, engine="pyarrow"
+			)
+			semantic_retrieval_df = pd.read_parquet(
+				self.semantic_retrieval_df_train_path, engine="pyarrow"
+			)
+			lexical_retrieval_df = pd.read_parquet(
+				self.lexical_retrieval_df_train_path, engine="pyarrow"
+			)
+			upper_bound_df = pd.read_parquet(
+				self.upper_bound_df_train_path, engine="pyarrow"
+			)
+
+			slice_idx = int(len(qa_embedding_df) * 0.85)
+
+			self.train_dataset = UpperBoundDataset(
+				qa_embedding_df[:slice_idx].reset_index(drop=True),
+				semantic_retrieval_df[:slice_idx].reset_index(drop=True),
+				lexical_retrieval_df[:slice_idx].reset_index(drop=True),
+				upper_bound_df[:slice_idx].reset_index(drop=True),
+			)
+			self.valid_dataset = UpperBoundDataset(
+				qa_embedding_df[slice_idx:].reset_index(drop=True),
+				semantic_retrieval_df[slice_idx:].reset_index(drop=True),
+				lexical_retrieval_df[slice_idx:].reset_index(drop=True),
+				upper_bound_df[slice_idx:].reset_index(drop=True),
+			)
+
+	def train_dataloader(self):
+		return UpperBoundDataLoader(
+			dataset=self.train_dataset,
+			shuffle=True,
+			batch_size=self.batch_size,
+			num_workers=self.num_workers,
+			persistent_workers=True,
+		)
+
+	def val_dataloader(self):
+		return UpperBoundDataLoader(
+			dataset=self.valid_dataset,
+			shuffle=False,
+			batch_size=self.batch_size,
+			num_workers=self.num_workers,
+			persistent_workers=True,
+		)

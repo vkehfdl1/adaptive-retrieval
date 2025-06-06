@@ -23,7 +23,7 @@ class RerankerBenchmark:
 		chroma_path: str,
 		collection_name: str = "kure",
 		top_k: int = 50,
-		k: int = 5,
+		k: int = 1,
 	):
 		self.dataset = dataset
 		self.chroma_retrieval = ChromaOnlyEmbeddings(chroma_path, collection_name)
@@ -117,13 +117,13 @@ class RerankerBenchmark:
 		)
 
 		weight_list = []
-		for idx in range(len(queries)):
-			semantic_reranked_score = semantic_reranked_scores[idx]
-			lexical_reranked_score = lexical_reranked_scores[idx]
-			weight_list.append(
-				sum(semantic_reranked_score)
-				/ (sum(semantic_reranked_score) + sum(lexical_reranked_score))
-			)
+		for semantic_reranked_score, lexical_reranked_score in zip(
+			semantic_reranked_scores, lexical_reranked_scores
+		):
+			if semantic_reranked_score[0] > lexical_reranked_score[0]:
+				weight_list.append(1.0)
+			else:
+				weight_list.append(0.0)
 
 		return weight_list
 

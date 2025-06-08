@@ -6,7 +6,7 @@ import torch
 from autorag.nodes.retrieval import BM25
 from autorag.utils.util import process_batch
 
-from src.dat.dat import DAT
+from src.dat.dat import DAT, MultiHopDAT
 from src.data.mfar import AutoRAGQADataset
 from src.upper_bound.run import get_non_duplicate_ids, calc_metrics
 from src.utils.chroma import ChromaOnlyEmbeddings
@@ -35,7 +35,7 @@ class DATBenchmark:
 		if not save_path.endswith(".parquet"):
 			raise ValueError("save_path must end with .parquet")
 
-		tasks = [self.__run(self.dataset[idx]) for idx in range(len(self.dataset))]
+		tasks = [self._run(self.dataset[idx]) for idx in range(len(self.dataset))]
 		loop = asyncio.get_event_loop()
 		dat_results = loop.run_until_complete(process_batch(tasks, batch_size=16))
 		df = pd.DataFrame(
@@ -57,14 +57,14 @@ class DATBenchmark:
 		metric_df.to_parquet(save_path, index=False)
 		return metric_df
 
-	async def __run(self, batch: dict):
+	async def _run(self, batch: dict):
 		semantic_ids, lexical_ids, semantic_scores, lexical_scores = (
 			self.retrieve_non_duplicate(batch)
 		)
 		cc_ids, semantic_score_tensor, lexical_score_tensor = sort_list_to_cc(
 			semantic_ids, lexical_ids, semantic_scores, lexical_scores
 		)
-		dat_weight = await self.__select_weight(batch)
+		dat_weight = await self._select_weight(batch)
 		cc_scores = hybrid_cc(
 			torch.Tensor([dat_weight]),
 			semantic_score_tensor,
@@ -88,7 +88,7 @@ class DATBenchmark:
 			"score_result": score_result,
 		}
 
-	async def __select_weight(self, batch: dict):
+	async def _select_weight(self, batch: dict):
 		query = batch["query"]
 		argmax_semantic_idx = torch.argmax(batch["semantic_retrieve_scores"])
 		argmax_lexical_idx = torch.argmax(batch["lexical_retrieve_scores"])
@@ -143,3 +143,37 @@ class DATBenchmark:
 			output_semantic_scores,
 			output_lexical_scores,
 		)
+
+
+class MultiHopDATBenchmark(DATBenchmark):
+	def __init__(
+		self,
+		dataset: AutoRAGQADataset,
+		project_dir: str,
+		chroma_path: str,
+		collection_name: str = "kure",
+		top_k: int = 20,
+		multi_hop_k: int = 5,
+	):
+		super().__init__(dataset, project_dir, chroma_path, collection_name, top_k)
+		self.dat = MultiHopDAT()
+		self.multi_hop_k = multi_hop_k
+
+	async def _select_weight(self, batch: dict):
+		query = batch["query"]
+		semantic_ids = batch["semantic_retrieved_ids"][: self.multi_hop_k]
+		lexical_ids = batch["lexical_retrieved_ids"][: self.multi_hop_k]
+
+		semantic_passages = [
+			self.corpus_df[self.corpus_df["doc_id"] == _id].iloc[0]["contents"]
+			for _id in semantic_ids
+		]
+		lexical_passages = [
+			self.corpus_df[self.corpus_df["doc_id"] == _id].iloc[0]["contents"]
+			for _id in lexical_ids
+		]
+
+		dat_score = await self.dat.calculate_score(
+			query, semantic_passages, lexical_passages
+		)
+		return dat_score

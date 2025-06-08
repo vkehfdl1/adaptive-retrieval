@@ -165,6 +165,7 @@ class UpperBoundDataModule(pl.LightningDataModule):
 			shuffle=True,
 			batch_size=self.batch_size,
 			num_workers=self.num_workers,
+			persistent_workers=True,
 		)
 
 	def val_dataloader(self):
@@ -173,6 +174,7 @@ class UpperBoundDataModule(pl.LightningDataModule):
 			shuffle=False,
 			batch_size=self.batch_size,
 			num_workers=self.num_workers,
+			persistent_workers=True,
 		)
 
 	def test_dataloader(self):
@@ -181,6 +183,7 @@ class UpperBoundDataModule(pl.LightningDataModule):
 			shuffle=False,
 			batch_size=self.batch_size,
 			num_workers=self.num_workers,
+			persistent_workers=True,
 		)
 
 

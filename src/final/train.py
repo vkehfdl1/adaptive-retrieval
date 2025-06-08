@@ -53,8 +53,8 @@ def main(
 
 	trainer = pl.Trainer(
 		accelerator="auto",
-		max_epochs=10,
-		log_every_n_steps=8,
+		max_epochs=5000,
+		log_every_n_steps=48,
 		logger=wandb_logger,
 		callbacks=[tqdm_cb, ckpt_cb, early_stop_callback],
 		check_val_every_n_epoch=1,

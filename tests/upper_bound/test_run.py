@@ -11,23 +11,23 @@ project_dir = root_dir / "projects"
 
 
 def test_upper_bound_finder():
-	project_name = "ko-strategyqa-train"
-	qa_df = pd.read_parquet(data_dir / "ko-strategyqa" / "qa_train_embeddings.parquet")
+	project_name = "mldr-dev"
+	qa_df = pd.read_parquet(data_dir / "mldr" / "qa_dev_embeddings.parquet")
 	semantic_retrieval_df = pd.read_parquet(
 		project_dir
 		/ project_name
-		/ "1"
+		/ "0"
 		/ "retrieve_node_line"
 		/ "retrieval"
-		/ "0.parquet"
+		/ "0.parquet",
 	)
 	lexical_retrieval_df = pd.read_parquet(
 		project_dir
 		/ project_name
-		/ "1"
+		/ "0"
 		/ "retrieve_node_line"
 		/ "retrieval"
-		/ "1.parquet"
+		/ "1.parquet",
 	)
 
 	dataset = AutoRAGQADataset(
@@ -43,7 +43,7 @@ def test_upper_bound_finder():
 		top_k=50,
 	)
 
-	finder.run(str(root_dir / f"{project_name}_result_top_k_50.parquet"))
+	finder.run(str(root_dir / f"{project_name}_upper_bound_top_k_50.parquet"))
 
 
 if __name__ == "__main__":
